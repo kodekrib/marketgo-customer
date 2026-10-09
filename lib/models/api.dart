@@ -41,6 +41,7 @@ class ApiStore {
     required this.rating,
     required this.lat,
     required this.lng,
+    required this.isActive,
   });
 
   final int id;
@@ -58,6 +59,7 @@ class ApiStore {
   final double rating;
   final double? lat;
   final double? lng;
+  final bool isActive;
 
   factory ApiStore.fromJson(Map<String, dynamic> json) => ApiStore(
         id: _int(json['id']),
@@ -75,6 +77,7 @@ class ApiStore {
         rating: _double(json['rating']),
         lat: json['lat'] == null ? null : _double(json['lat']),
         lng: json['lng'] == null ? null : _double(json['lng']),
+        isActive: json['is_active'] as bool? ?? true,
       );
 }
 
@@ -172,6 +175,8 @@ class ApiDelivery {
     required this.lastLocationAt,
     required this.estimatedTime,
     required this.riderName,
+    required this.riderPhotoUrl,
+    required this.riderRating,
     required this.storeName,
     required this.orderItems,
     required this.createdAt,
@@ -195,6 +200,8 @@ class ApiDelivery {
   final DateTime? lastLocationAt;
   final DateTime? estimatedTime;
   final String riderName;
+  final String riderPhotoUrl;
+  final double riderRating;
   final String storeName;
   final List<ApiOrderItem> orderItems;
   final DateTime createdAt;
@@ -244,6 +251,8 @@ class ApiDelivery {
             ? null
             : DateTime.tryParse(json['estimated_time'] as String? ?? ''),
         riderName: json['rider_name'] as String? ?? '',
+        riderPhotoUrl: json['rider_photo_url'] as String? ?? '',
+        riderRating: _double(json['rider_rating']),
         storeName: json['store_name'] as String? ?? '',
         orderItems: _list(json['order_items'])
             .whereType<Map<String, dynamic>>()

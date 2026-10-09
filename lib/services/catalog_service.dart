@@ -136,6 +136,7 @@ List<Vendor> _adaptStores(List<dynamic> raw) => raw
           estimatedTime: s.estimatedTime,
           ratingCount: s.ratingCount,
           isVerified: s.isVerified,
+          isActive: s.isActive,
           lat: s.lat,
           lng: s.lng,
         ))

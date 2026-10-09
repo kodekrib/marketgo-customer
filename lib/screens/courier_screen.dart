@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import '../app.dart';
 import '../models/api.dart';
+import '../models/request.dart';
 import '../services/auth_service.dart';
 import '../services/courier_service.dart';
+import '../services/maps_service.dart';
+import '../services/request_service.dart';
 import '../widgets/common.dart';
+import '../widgets/place_search_field.dart';
+import 'riders_screen.dart';
 import 'tracking_screen.dart';
 
 /// Courier tab — book an on-demand package pickup and track it live.
@@ -74,6 +79,7 @@ class _CourierTabState extends State<CourierTab> {
       ),
       builder: (_) => _RequestCourierSheet(
         service: _service,
+        auth: widget.auth,
         token: token,
         onCreated: (delivery) {
           Navigator.of(context).push(
@@ -169,11 +175,13 @@ class _CourierTabState extends State<CourierTab> {
 class _RequestCourierSheet extends StatefulWidget {
   const _RequestCourierSheet({
     required this.service,
+    required this.auth,
     required this.token,
     required this.onCreated,
   });
 
   final CourierService service;
+  final AuthModel auth;
   final String token;
   final ValueChanged<ApiDelivery> onCreated;
 
@@ -187,6 +195,8 @@ class _RequestCourierSheetState extends State<_RequestCourierSheet> {
   final _dropoff = TextEditingController(text: '4 Bode Thomas St, Surulere');
   final _phone = TextEditingController(text: '08012345678');
   final _details = TextEditingController(text: 'Small package (2kg)');
+  PlaceSuggestion? _pickupPick;
+  PlaceSuggestion? _dropoffPick;
   double _weightKg = 2.0;
   bool _submitting = false;
 
@@ -203,6 +213,50 @@ class _RequestCourierSheetState extends State<_RequestCourierSheet> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _submitting = true);
     try {
+      final deliveryLat = _dropoffPick?.latitude;
+      final deliveryLng = _dropoffPick?.longitude;
+
+      // "Choose your rider": when both ends are geocoded, open a bid request
+      // and let the customer pick a nearby rider who names their price. Falls
+      // back to the instant broadcast when coordinates are missing or the
+      // customer backs out.
+      RiderOffer? chosen;
+      if (_pickupPick != null &&
+          _dropoffPick != null &&
+          _pickupPick!.latitude != 0 &&
+          _dropoffPick!.latitude != 0) {
+        try {
+          final request = await RequestService().createRequest(
+            widget.token,
+            CreateDeliveryRequest(
+              type: 'courier',
+              pickupAddress: _pickup.text.trim(),
+              pickupLat: _pickupPick!.latitude,
+              pickupLng: _pickupPick!.longitude,
+              deliveryAddress: _dropoff.text.trim(),
+              deliveryLat: _dropoffPick!.latitude,
+              deliveryLng: _dropoffPick!.longitude,
+              phone: _phone.text.trim(),
+              packageDetails: _details.text.trim(),
+              weightKg: _weightKg,
+            ),
+          );
+          if (!mounted) return;
+          chosen = await Navigator.of(context).push<RiderOffer>(
+            MaterialPageRoute(
+              builder: (_) => RiderPickerScreen(
+                auth: widget.auth,
+                token: widget.token,
+                request: request,
+              ),
+            ),
+          );
+        } catch (_) {
+          chosen = null;
+        }
+      }
+      if (!mounted) return;
+
       final delivery = await widget.service.requestCourier(
         widget.token,
         CourierRequest(
@@ -211,6 +265,14 @@ class _RequestCourierSheetState extends State<_RequestCourierSheet> {
           phone: _phone.text.trim(),
           packageDetails: _details.text.trim(),
           weightKg: _weightKg,
+          pickupLat: _pickupPick?.latitude,
+          pickupLng: _pickupPick?.longitude,
+          deliveryLat: deliveryLat,
+          deliveryLng: deliveryLng,
+          riderId: chosen?.riderId,
+          offerId: chosen?.offerId,
+          price: chosen?.price,
+          requestId: chosen?.requestId,
         ),
       );
       if (!mounted) return;
@@ -248,9 +310,25 @@ class _RequestCourierSheetState extends State<_RequestCourierSheet> {
                 style: TextStyle(fontSize: 13, color: Color(0xFF5B616A)),
               ),
               const SizedBox(height: 18),
-              _field(_pickup, 'Pickup address', Icons.trip_origin_rounded),
+              PlaceSearchField(
+                controller: _pickup,
+                inForm: true,
+                labelText: 'Pickup address',
+                prefixIcon: const Icon(Icons.trip_origin_rounded, size: 20),
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Required' : null,
+                onLocationChanged: (p) => setState(() => _pickupPick = p),
+              ),
               const SizedBox(height: 12),
-              _field(_dropoff, 'Drop-off address', Icons.place_rounded),
+              PlaceSearchField(
+                controller: _dropoff,
+                inForm: true,
+                labelText: 'Drop-off address',
+                prefixIcon: const Icon(Icons.place_rounded, size: 20),
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Required' : null,
+                onLocationChanged: (p) => setState(() => _dropoffPick = p),
+              ),
               const SizedBox(height: 12),
               _field(_phone, 'Contact phone', Icons.phone_outlined,
                   keyboard: TextInputType.phone),
@@ -270,7 +348,8 @@ class _RequestCourierSheetState extends State<_RequestCourierSheet> {
                           child: CircularProgressIndicator(
                               strokeWidth: 2, color: Colors.white),
                         )
-                      : Text('Book courier — ${CustomerApp.currencySymbol}1,500'),
+                      : Text(
+                          'Choose your rider — ${CustomerApp.currencySymbol}1,500 up'),
                 ),
               ),
             ],

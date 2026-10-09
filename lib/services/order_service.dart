@@ -29,6 +29,11 @@ class OrderService {
 
   /// Places a real order. Returns the created order (with its pending
   /// delivery) so checkout can jump straight into tracking.
+  ///
+  /// When the customer booked a rider through the bid flow, [riderId] +
+  /// [offerId] + [requestId] pin the delivery to that rider and [deliveryFee]
+  /// is the agreed bid price; otherwise the delivery is broadcast for any
+  /// rider to accept.
   Future<ApiOrder> placeOrder(
     String token,
     List<CheckoutItem> items, {
@@ -36,6 +41,10 @@ class OrderService {
     required String phone,
     double? deliveryLat,
     double? deliveryLng,
+    int? riderId,
+    int? offerId,
+    int? requestId,
+    double? deliveryFee,
   }) async {
     final data = await api.post(
       '/api/v1/customer/orders',
@@ -43,10 +52,15 @@ class OrderService {
       body: {
         'delivery_address': address,
         'phone': phone,
-        if (deliveryLat != null && deliveryLat != 0) 'delivery_latitude': deliveryLat,
+        if (deliveryLat != null && deliveryLat != 0)
+          'delivery_latitude': deliveryLat,
         if (deliveryLng != null && deliveryLng != 0)
           'delivery_longitude': deliveryLng,
         'items': items.map((e) => e.toJson()).toList(),
+        if (riderId != null) 'rider_id': riderId,
+        if (offerId != null) 'offer_id': offerId,
+        if (requestId != null) 'request_id': requestId,
+        if (deliveryFee != null) 'delivery_fee': deliveryFee,
       },
     );
     final order = data['order'];

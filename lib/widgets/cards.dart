@@ -96,21 +96,25 @@ class VendorCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isActive = vendor.isActive;
+    final color = isActive ? theme.textTheme.titleLarge!.color : theme.disabledColor;
     return GestureDetector(
-      onTap: onTap,
+      onTap: isActive ? onTap : null,
       child: Container(
         width: 176,
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: CustomerApp.surface,
+          color: isActive ? CustomerApp.surface : CustomerApp.surfaceMuted,
           borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          boxShadow: isActive
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : null,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -132,6 +136,15 @@ class VendorCard extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (!isActive)
+                  const Padding(
+                    padding: EdgeInsets.only(left: 4),
+                    child: Icon(
+                      Icons.lock_outline_rounded,
+                      size: 18,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ),
                 const Spacer(),
                 if (vendor.isVerified)
                   const Padding(
@@ -147,7 +160,11 @@ class VendorCard extends StatelessWidget {
               vendor.name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 15,
+                color: color,
+              ),
             ),
             Text(vendor.tagline, style: theme.textTheme.bodyMedium),
             const Spacer(),
@@ -159,11 +176,17 @@ class VendorCard extends StatelessWidget {
                   vendor.ratingCount > 0
                       ? '${vendor.rating.toStringAsFixed(1)} (${vendor.ratingCount})'
                       : vendor.rating.toStringAsFixed(1),
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                    color: isActive ? null : theme.disabledColor,
+                  ),
                 ),
                 const Spacer(),
-                Text(vendor.eta,
-                    style: theme.textTheme.bodyMedium?.copyWith(fontSize: 12)),
+                Text(
+                  vendor.eta,
+                  style: theme.textTheme.bodyMedium?.copyWith(fontSize: 12, color: isActive ? null : theme.disabledColor),
+                ),
               ],
             ),
           ],
@@ -204,17 +227,17 @@ class ProductCard extends StatelessWidget {
             children: [
               Container(
                 width: double.infinity,
-                height: 74,
+                height: 96,
                 clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
                   color: product.color.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 child: RemoteImage(
                   url: product.imageUrl,
                   fallbackIcon: product.icon,
                   fallbackColor: product.color,
-                  iconSize: 38,
+                  iconSize: 44,
                 ),
               ),
               if (product.tag != null)

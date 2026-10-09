@@ -7,7 +7,9 @@ import '../models/api.dart';
 import '../services/auth_service.dart';
 import '../services/courier_service.dart';
 import '../services/order_service.dart';
+import '../services/request_service.dart';
 import '../services/websocket_service.dart';
+import '../widgets/common.dart';
 import '../widgets/live_map.dart';
 import 'chat_screen.dart';
 
@@ -90,6 +92,8 @@ class _TrackingScreenState extends State<TrackingScreen> {
           lastLocationAt: DateTime.now(),
           estimatedTime: d.estimatedTime,
           riderName: d.riderName,
+          riderPhotoUrl: d.riderPhotoUrl,
+          riderRating: d.riderRating,
           storeName: d.storeName,
           orderItems: d.orderItems,
           createdAt: d.createdAt,
@@ -304,7 +308,7 @@ class _BackButton extends StatelessWidget {
   }
 }
 
-class _RiderInfoCard extends StatelessWidget {
+class _RiderInfoCard extends StatefulWidget {
   const _RiderInfoCard({this.delivery, this.auth, this.onChat});
 
   final ApiDelivery? delivery;
@@ -312,13 +316,73 @@ class _RiderInfoCard extends StatelessWidget {
   final VoidCallback? onChat;
 
   @override
+  State<_RiderInfoCard> createState() => _RiderInfoCardState();
+}
+
+class _RiderInfoCardState extends State<_RiderInfoCard> {
+  bool _rated = false;
+  bool _rating = false;
+
+  ApiDelivery? get d => widget.delivery;
+
+  String get _riderName =>
+      d?.riderName.isNotEmpty == true ? d!.riderName : 'Rider';
+
+  bool get _waiting {
+    final delivery = d;
+    return delivery == null ||
+        delivery.riderName.isEmpty ||
+        delivery.status == 'pending';
+  }
+
+  bool get _canRate => !_waiting && d?.status == 'delivered';
+
+  Future<void> _openRating() async {
+    final token = widget.auth?.accessToken;
+    if (token == null || token == 'demo.access' || d == null) return;
+    final result = await showModalBottomSheet<_RatingResult>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => _RateRiderSheet(riderName: _riderName),
+    );
+    if (result == null || !mounted) return;
+    setState(() => _rating = true);
+    try {
+      await RequestService().rateRider(
+        token,
+        d!.id,
+        stars: result.stars,
+        comment: result.comment,
+      );
+      if (!mounted) return;
+      setState(() {
+        _rated = true;
+        _rating = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Thanks! Your rating helps other riders stand out.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _rating = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not save rating: $e')),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final d = delivery;
-    final riderName = d?.riderName.isNotEmpty == true ? d!.riderName : 'Rider';
-    final payments =
-        d != null ? '${CustomerApp.currencySymbol}${d.fee.round()} fee' : '${CustomerApp.currencySymbol}500 delivery';
-    final waiting =
-        d == null || d.riderName.isEmpty || d.status == 'pending';
+    final payments = d != null
+        ? '${CustomerApp.currencySymbol}${d!.fee.round()} fee'
+        : '${CustomerApp.currencySymbol}500 delivery';
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -339,15 +403,28 @@ class _RiderInfoCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: const Color(0xFFDEF7E5),
-                child: Text(
-                  _initials(waiting ? 'rider' : riderName),
-                  style: const TextStyle(
-                    color: Color(0xFF15803D),
-                    fontWeight: FontWeight.w800,
-                  ),
+              ClipOval(
+                child: SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: d?.riderPhotoUrl.isNotEmpty == true
+                      ? RemoteImage(
+                          url: d!.riderPhotoUrl,
+                          fallbackIcon: Icons.person_rounded,
+                          fallbackColor: CustomerApp.brandGreen,
+                          iconSize: 24,
+                        )
+                      : Container(
+                          color: const Color(0xFFDEF7E5),
+                          alignment: Alignment.center,
+                          child: Text(
+                            _initials(_waiting ? 'rider' : _riderName),
+                            style: const TextStyle(
+                              color: Color(0xFF15803D),
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -355,19 +432,40 @@ class _RiderInfoCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      waiting ? 'Looking for a rider…' : riderName,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16,
-                        color: Color(0xFF111418),
-                      ),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            _waiting ? 'Looking for a rider…' : _riderName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 16,
+                              color: Color(0xFF111418),
+                            ),
+                          ),
+                        ),
+                        if (d?.riderRating != null && d!.riderRating > 0) ...[
+                          const SizedBox(width: 6),
+                          const Icon(Icons.star_rounded,
+                              size: 15, color: Color(0xFFF59E0B)),
+                          Text(
+                            d!.riderRating.toStringAsFixed(1),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12,
+                              color: Color(0xFF111418),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 2),
                     Text(
                       d == null
                           ? 'Waiting for a rider to accept'
-                          : 'MarketGO ${d.type == 'courier' ? 'Courier' : 'Bike'}',
+                          : 'MarketGO ${d!.type == 'courier' ? 'Courier' : 'Bike'}',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             fontSize: 13,
                             color: const Color(0xFF5B616A),
@@ -400,10 +498,10 @@ class _RiderInfoCard extends StatelessWidget {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: waiting
+                  onPressed: _waiting
                       ? null
                       : () => ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Calling $riderName…')),
+                            SnackBar(content: Text('Calling $_riderName…')),
                           ),
                   icon: const Icon(Icons.phone_outlined, size: 18),
                   label: const Text('Call'),
@@ -412,14 +510,126 @@ class _RiderInfoCard extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: waiting ? null : onChat,
+                  onPressed: _waiting ? null : widget.onChat,
                   icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
                   label: const Text('Message'),
                 ),
               ),
             ],
           ),
+          if (_canRate) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _rating
+                    ? null
+                    : _rated
+                        ? null
+                        : _openRating,
+                icon: _rating
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.star_outline_rounded, size: 18),
+                label: Text(_rated ? 'Rate submitted' : 'Rate your rider'),
+              ),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+class _RatingResult {
+  const _RatingResult(this.stars, this.comment);
+
+  final int stars;
+  final String comment;
+}
+
+class _RateRiderSheet extends StatefulWidget {
+  const _RateRiderSheet({required this.riderName});
+
+  final String riderName;
+
+  @override
+  State<_RateRiderSheet> createState() => _RateRiderSheetState();
+}
+
+class _RateRiderSheetState extends State<_RateRiderSheet> {
+  int _stars = 5;
+  final _comment = TextEditingController();
+
+  @override
+  void dispose() {
+    _comment.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Rate ${widget.riderName}',
+                style: theme.textTheme.titleLarge),
+            const SizedBox(height: 4),
+            const Text(
+              'How was the delivery? Your rating shows on the rider’s card.',
+              style: TextStyle(fontSize: 13, color: Color(0xFF5B616A)),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                for (var i = 1; i <= 5; i++)
+                  IconButton(
+                    onPressed: () => setState(() => _stars = i),
+                    iconSize: 36,
+                    icon: Icon(
+                      i <= _stars
+                          ? Icons.star_rounded
+                          : Icons.star_outline_rounded,
+                      color: i <= _stars
+                          ? const Color(0xFFF59E0B)
+                          : const Color(0xFFD1D5DB),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _comment,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Comment (optional)',
+                alignLabelWithHint: true,
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(
+                  _RatingResult(_stars, _comment.text.trim()),
+                ),
+                child: Text('Submit $_stars-star rating'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

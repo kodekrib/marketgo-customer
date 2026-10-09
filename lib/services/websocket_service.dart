@@ -46,6 +46,9 @@ class CustomerWebSocket {
   Stream<WsEvent> get orderStatus => events.where((e) => e.type == 'order.status_changed');
   Stream<WsEvent> get notification => events.where((e) => e.type == 'notification.new');
 
+  /// Live rider bids on a pick-a-rider delivery request (`request.offer`).
+  Stream<WsEvent> get requestOffer => events.where((e) => e.type == 'request.offer');
+
   /// Connects with the given JWT access token. Calling this again disconnects
   /// any existing connection first.
   void connect(String token) {

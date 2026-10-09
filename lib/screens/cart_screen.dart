@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import '../app.dart';
 import '../models/cart.dart';
+import '../models/request.dart';
 import '../services/account_store.dart';
 import '../services/auth_service.dart';
 import '../services/order_service.dart';
 import '../services/payment_service.dart';
 import '../services/maps_service.dart';
+import '../services/request_service.dart';
 import 'payment_webview_screen.dart';
+import 'riders_screen.dart';
 import '../widgets/cards.dart';
 import '../widgets/common.dart';
 import '../widgets/place_search_field.dart';
@@ -150,6 +153,7 @@ class CartTab extends StatelessWidget {
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) => _CheckoutSheet(
         service: orders,
+        auth: auth,
         token: token,
         email: auth.user?.email ?? '',
         items: items,
@@ -185,6 +189,7 @@ const List<_DeliveryArea> _deliveryAreas = [
 class _CheckoutSheet extends StatefulWidget {
   const _CheckoutSheet({
     required this.service,
+    required this.auth,
     required this.token,
     required this.email,
     required this.items,
@@ -193,6 +198,7 @@ class _CheckoutSheet extends StatefulWidget {
   });
 
   final OrderService service;
+  final AuthModel auth;
   final String token;
   final String email;
   final List<CheckoutItem> items;
@@ -232,13 +238,51 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _submitting = true);
     try {
+      final deliveryLat = _picked?.latitude ?? _area?.lat;
+      final deliveryLng = _picked?.longitude ?? _area?.lng;
+
+      // "Choose your rider": open a bid request and let the customer pick one
+      // of the online riders who offer a price. If the request can't be opened
+      // or the customer backs out, the order still goes out broadcast-style.
+      RiderOffer? chosen;
+      try {
+        final request = await RequestService().createRequest(
+          widget.token,
+          CreateDeliveryRequest(
+            type: 'order',
+            items: widget.items.map((e) => e.toJson()).toList(),
+            deliveryAddress: _address.text.trim(),
+            deliveryLat: deliveryLat,
+            deliveryLng: deliveryLng,
+            phone: _phone.text.trim(),
+          ),
+        );
+        if (!mounted) return;
+        chosen = await Navigator.of(context).push<RiderOffer>(
+          MaterialPageRoute(
+            builder: (_) => RiderPickerScreen(
+              auth: widget.auth,
+              token: widget.token,
+              request: request,
+            ),
+          ),
+        );
+      } catch (_) {
+        chosen = null;
+      }
+      if (!mounted) return;
+
       final order = await widget.service.placeOrder(
         widget.token,
         widget.items,
         address: _address.text.trim(),
         phone: _phone.text.trim(),
-        deliveryLat: _picked?.latitude ?? _area?.lat,
-        deliveryLng: _picked?.longitude ?? _area?.lng,
+        deliveryLat: deliveryLat,
+        deliveryLng: deliveryLng,
+        riderId: chosen?.riderId,
+        offerId: chosen?.offerId,
+        requestId: chosen?.requestId,
+        deliveryFee: chosen?.price,
       );
       if (!mounted) return;
 
@@ -285,6 +329,7 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
           } catch (_) {
             // Verification is best-effort; webhook will also confirm.
           }
+          if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Payment successful! Order #$order.id confirmed.'),

@@ -13,6 +13,10 @@ String formatPrice(int value) {
   return '${CustomerApp.currencySymbol}$buffer';
 }
 
+/// Formats a double money amount, rounding to whole currency units,
+/// e.g. 1520.5 -> "₦1,521".
+String formatMoney(double value) => formatPrice(value.round());
+
 /// Colour assigned to each order status, matching the marketgo-vendor panel.
 const Map<String, Color> kOrderStatusColors = {
   'Processing': Color(0xFFD97706),

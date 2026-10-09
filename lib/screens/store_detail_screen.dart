@@ -377,13 +377,13 @@ class _StoreProductCard extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(14),
             child: SizedBox(
-              width: 56,
-              height: 56,
+              width: 72,
+              height: 72,
               child: RemoteImage(
                 url: product.imageUrl,
                 fallbackIcon: product.icon,
                 fallbackColor: product.color,
-                iconSize: 28,
+                iconSize: 36,
               ),
             ),
           ),

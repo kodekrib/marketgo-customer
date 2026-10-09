@@ -24,6 +24,7 @@ class Vendor {
     this.estimatedTime = '22-32 min',
     this.ratingCount = 0,
     this.isVerified = false,
+    this.isActive = true,
     this.lat,
     this.lng,
   });
@@ -45,6 +46,7 @@ class Vendor {
   final String estimatedTime;
   final int ratingCount;
   final bool isVerified;
+  final bool isActive;
   final double? lat;
   final double? lng;
 }

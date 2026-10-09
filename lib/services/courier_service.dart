@@ -13,6 +13,10 @@ class CourierRequest {
     this.pickupLng,
     this.deliveryLat,
     this.deliveryLng,
+    this.riderId,
+    this.offerId,
+    this.price,
+    this.requestId,
   });
 
   final String pickupAddress;
@@ -24,6 +28,10 @@ class CourierRequest {
   final double? pickupLng;
   final double? deliveryLat;
   final double? deliveryLng;
+  final int? riderId;
+  final int? offerId;
+  final double? price;
+  final int? requestId;
 
   Map<String, dynamic> toJson() => {
         'pickup_address': pickupAddress,
@@ -37,6 +45,10 @@ class CourierRequest {
           'delivery_latitude': deliveryLat,
         if (deliveryLng != null && deliveryLng != 0)
           'delivery_longitude': deliveryLng,
+        if (riderId != null) 'rider_id': riderId,
+        if (offerId != null) 'offer_id': offerId,
+        if (price != null) 'price': price,
+        if (requestId != null) 'request_id': requestId,
       };
 }
 
