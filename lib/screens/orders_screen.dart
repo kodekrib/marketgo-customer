@@ -94,7 +94,7 @@ class _OrdersTabState extends State<OrdersTab> {
 
     final orders = _orders;
     final active = _active;
-    final fromApi = orders != null;
+    final activeApi = _activeApi();
 
     final slivers = <Widget>[
       const SliverToBoxAdapter(child: PageHeader('Orders')),
@@ -111,42 +111,21 @@ class _OrdersTabState extends State<OrdersTab> {
           ),
         ),
       );
-    } else if (!fromApi) {
-      // Offline/demo session: keep the prototype's bundled live-order banner
-      // as the standalone demo.
-      slivers.add(
-        SliverToBoxAdapter(
-          child: GestureDetector(
-            onTap: () => widget.onOpenTracking(),
-            child: OrderTrackerCard(order: activeOrder),
-          ),
-        ),
-      );
     } else {
-      if (active != null) {
-        final apiOrder = _activeApi();
-        final isLive = apiOrder?.isLiveTracking ?? true;
-        final isAwaiting =
-            apiOrder != null && apiOrder.isAwaitingRider;
+      // Driver-driven status card: it only appears once a driver has accepted
+      // an active trip. There is no demo or awaiting placeholder banner.
+      if (active != null && (activeApi?.hasRiderAssigned ?? false)) {
         slivers.add(
           SliverToBoxAdapter(
-            child: isLive
-                ? GestureDetector(
-                    onTap: () => widget.onOpenTracking(orderId: _orderId(active)),
-                    child: OrderTrackerCard(order: active),
-                  )
-                : isAwaiting
-                    ? AwaitingRiderCard(
-                        order: active,
-                        onTap: () =>
-                            widget.onOpenTracking(orderId: _orderId(active)),
-                      )
-                    : const SizedBox.shrink(),
+            child: GestureDetector(
+              onTap: () => widget.onOpenTracking(orderId: _orderId(active)),
+              child: OrderTrackerCard(order: active),
+            ),
           ),
         );
       }
       slivers.add(const SliverToBoxAdapter(child: SectionHeader('Order history')));
-      if (orders.isEmpty) {
+      if (orders == null || orders.isEmpty) {
         slivers.add(
           SliverToBoxAdapter(
             child: Padding(

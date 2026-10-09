@@ -4,6 +4,7 @@ import '../services/auth_service.dart';
 import '../services/settings_service.dart';
 import '../widgets/route_animation.dart';
 import 'forgot_password_screen.dart';
+import 'mfa_screen.dart';
 import 'otp_screen.dart';
 
 /// Intro / login screen for the MarketGO customer app.
@@ -69,21 +70,29 @@ class _LoginScreenState extends State<LoginScreen> {
     if (ok) {
       widget.onAuthenticated?.call();
       Navigator.of(context).maybePop();
+    } else if (widget.auth.pendingMfa != null) {
+      // Password sign-in needs a second factor — collect the code.
+      _openMfa(email);
     }
   }
 
-  void _useDemo(String email) {
-    _emailController.text = email;
-    _passwordController.text = 'Customer@123';
-    _emailFocus.requestFocus();
-  }
-
-  /// Enter a server-less demo session.
-  void _signInTest() {
+  /// Opens the MFA code screen for a password sign-in awaiting verification.
+  void _openMfa(String email) {
     FocusScope.of(context).unfocus();
-    widget.auth.enterDemoMode();
-    widget.onAuthenticated?.call();
-    Navigator.of(context).maybePop();
+    final loginNavigator = Navigator.of(context);
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => MfaScreen(
+          auth: widget.auth,
+          email: email,
+          onVerified: () {
+            widget.onAuthenticated?.call();
+            WidgetsBinding.instance
+                .addPostFrameCallback((_) => loginNavigator.maybePop());
+          },
+        ),
+      ),
+    );
   }
 
   /// Opens the phone/OTP sign-in flow.
@@ -182,9 +191,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           error: widget.auth.error,
                           loading: widget.auth.loading,
                           onSignIn: _signIn,
-                          onTestMode: _signInTest,
                           onOpenOtp: _openOtp,
-                          onUseDemo: _useDemo,
                           requestFocusPassword: () =>
                               _passwordFocus.requestFocus(),
                           appName: _settings?.appName ?? 'MarketGO',
@@ -329,9 +336,7 @@ class _LoginCard extends StatelessWidget {
     required this.error,
     required this.loading,
     required this.onSignIn,
-    required this.onTestMode,
     required this.onOpenOtp,
-    required this.onUseDemo,
     required this.requestFocusPassword,
     required this.appName,
   });
@@ -347,9 +352,7 @@ class _LoginCard extends StatelessWidget {
   final String? error;
   final bool loading;
   final VoidCallback onSignIn;
-  final VoidCallback onTestMode;
   final VoidCallback onOpenOtp;
-  final ValueChanged<String> onUseDemo;
   final VoidCallback requestFocusPassword;
   final String appName;
 
@@ -382,76 +385,6 @@ class _LoginCard extends StatelessWidget {
         Text(
           'Use your $appName customer account to continue.',
           style: theme.textTheme.bodyMedium,
-        ),
-        const SizedBox(height: 16),
-
-        // Server-less test mode: lets you explore behind login before the
-        // backend / database is deployed.
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: CustomerApp.brandGreenLight,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: CustomerApp.brandGreen.withOpacity(0.35),
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.flash_on_rounded,
-                  color: CustomerApp.brandGreenDark),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'No server? Explore the full app now',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 13,
-                        color: CustomerApp.brandGreenDark,
-                      ),
-                    ),
-                    Text(
-                      'Skips sign-in entirely for testing.',
-                      style: TextStyle(
-                        color: CustomerApp.brandGreenDark,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              TextButton(
-                onPressed: onTestMode,
-                style: TextButton.styleFrom(
-                  foregroundColor: CustomerApp.brandGreenDark,
-                ),
-                child: const Text('Test mode'),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // Demo credential quick-fill.
-        Row(
-          children: [
-            Text('Demo account', style: theme.textTheme.bodySmall),
-            const Spacer(),
-            _DemoChip(
-              label: 'Customer',
-              email: 'customer@marketgo.com',
-              onTap: onUseDemo,
-            ),
-            const SizedBox(width: 8),
-            _DemoChip(
-              label: 'Shopper',
-              email: 'shopper@marketgo.com',
-              onTap: onUseDemo,
-            ),
-          ],
         ),
         const SizedBox(height: 16),
 
@@ -589,34 +522,6 @@ class _LoginCard extends StatelessWidget {
           ],
         ),
       ],
-    );
-  }
-}
-
-class _DemoChip extends StatelessWidget {
-  const _DemoChip({
-    required this.label,
-    required this.email,
-    required this.onTap,
-  });
-
-  final String label;
-  final String email;
-  final ValueChanged<String> onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return ActionChip(
-      avatar: Icon(Icons.bolt, size: 16, color: CustomerApp.brandGreen),
-      label: Text(label),
-      backgroundColor: CustomerApp.brandGreenLight,
-      side: BorderSide.none,
-      labelStyle: TextStyle(
-        color: CustomerApp.brandGreenDark,
-        fontWeight: FontWeight.w700,
-      ),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      onPressed: () => onTap(email),
     );
   }
 }

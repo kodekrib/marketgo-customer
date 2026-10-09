@@ -117,14 +117,20 @@ class VendorCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: vendor.color.withOpacity(0.14),
-                    borderRadius: BorderRadius.circular(14),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: SizedBox(
+                    width: 44,
+                    height: 44,
+                    child: RemoteImage(
+                      url: vendor.logoUrl.isNotEmpty
+                          ? vendor.logoUrl
+                          : vendor.bannerUrl,
+                      fallbackIcon: vendor.icon,
+                      fallbackColor: vendor.color,
+                      iconSize: 22,
+                    ),
                   ),
-                  child: Icon(vendor.icon, color: vendor.color),
                 ),
                 const Spacer(),
                 if (vendor.isVerified)
@@ -199,11 +205,17 @@ class ProductCard extends StatelessWidget {
               Container(
                 width: double.infinity,
                 height: 74,
+                clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
                   color: product.color.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(product.icon, size: 38, color: product.color),
+                child: RemoteImage(
+                  url: product.imageUrl,
+                  fallbackIcon: product.icon,
+                  fallbackColor: product.color,
+                  iconSize: 38,
+                ),
               ),
               if (product.tag != null)
                 Positioned(
@@ -335,11 +347,17 @@ class CartLineItem extends StatelessWidget {
           Container(
             width: 46,
             height: 46,
+            clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               color: product.color.withOpacity(0.12),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(product.icon, color: product.color, size: 24),
+            child: RemoteImage(
+              url: product.imageUrl,
+              fallbackIcon: product.icon,
+              fallbackColor: product.color,
+              iconSize: 24,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(

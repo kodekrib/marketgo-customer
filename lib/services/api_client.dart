@@ -1,19 +1,15 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 /// Resolves the marketgo-api base URL.
 ///
-/// Override with `--dart-define=API_URL=...`. Android emulators reach the host
-/// machine through 10.0.2.2 rather than localhost.
+/// Override with `--dart-define=API_URL=...`; otherwise the production API at
+/// https://api.suftrip.com is used.
 String defaultApiBaseUrl() {
   const fromEnv = String.fromEnvironment('API_URL');
   if (fromEnv.isNotEmpty) return fromEnv;
-  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-    return 'http://10.0.2.2:8080';
-  }
-  return 'http://localhost:8080';
+  return 'https://api.suftrip.com';
 }
 
 class ApiException implements Exception {

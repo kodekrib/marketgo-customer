@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../app.dart';
 import '../models/api.dart';
@@ -7,6 +9,7 @@ import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../services/catalog_service.dart';
 import '../services/order_service.dart';
+import '../services/websocket_service.dart';
 import '../widgets/cards.dart';
 import '../widgets/common.dart';
 import 'account_screen.dart';
@@ -247,11 +250,35 @@ class _HomeTabState extends State<_HomeTab> {
   Order? _activeOrder;
   ApiOrder? _activeApiOrder;
   int _selectedCategory = 0;
+  CustomerWebSocket? _ws;
+  StreamSubscription<WsEvent>? _wsSub;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _connectStatusUpdates();
+  }
+
+  @override
+  void dispose() {
+    _wsSub?.cancel();
+    _ws?.dispose();
+    super.dispose();
+  }
+
+  /// Streams live order/delivery status so the rider status card pops up the
+  /// moment a driver accepts the trip — and refreshes as the trip progresses.
+  void _connectStatusUpdates() {
+    final token = widget.auth.accessToken;
+    if (token == null || token == 'demo.access') return;
+    _ws = CustomerWebSocket(api: widget.auth.api);
+    _ws!.connect(token);
+    _wsSub = _ws!.events
+        .where((e) =>
+            e.type == 'order.status_changed' ||
+            e.type == 'delivery.status_changed')
+        .listen((_) => _refreshActiveOrder());
   }
 
   Future<void> _load() async {
@@ -265,11 +292,21 @@ class _HomeTabState extends State<_HomeTab> {
     });
   }
 
+  Future<void> _refreshActiveOrder() async {
+    final (order, apiOrder) = await _fetchActiveOrder();
+    if (!mounted) return;
+    setState(() {
+      _activeOrder = order;
+      _activeApiOrder = apiOrder;
+    });
+  }
+
   Future<(Order?, ApiOrder?)> _fetchActiveOrder() async {
     final token = widget.auth.accessToken;
     if (token == null || token == 'demo.access') {
-      // Signed-out storefront keeps the demo live-order card for atmosphere.
-      return (activeOrder, null);
+      // Signed-out storefront shows no rider status card: the card is
+      // driver-driven, so it only appears once a real driver accepts a trip.
+      return (null, null);
     }
     try {
       final orders = await widget.orders.orders(token);
@@ -297,8 +334,7 @@ class _HomeTabState extends State<_HomeTab> {
       slivers: [
         SliverToBoxAdapter(child: _GreetingHeader(auth: widget.auth)),
         const SliverToBoxAdapter(child: _SearchField()),
-        if (_activeOrder != null && _activeOrder!.status != 'Delivered')
-          _activeTrackerSliver(),
+        if (_riderCardVisible) _activeTrackerSliver(),
         const SliverToBoxAdapter(child: SectionHeader('Shop by category')),
         if (snapshot == null)
           const SliverToBoxAdapter(child: _LoadingStrip())
@@ -346,27 +382,23 @@ class _HomeTabState extends State<_HomeTab> {
     return int.tryParse(id ?? '');
   }
 
-  /// Sliver for the live order status — full Chat/Track card only while the
-  /// order is being tracked live (rider assigned + GPS live), otherwise the
-  /// slim "Awaiting rider…" placeholder when a rider isn't attached yet.
-  Widget _activeTrackerSliver() {
+  /// The rider status card is driver-driven: it stays hidden until a driver
+  /// accepts the trip, then pops up and follows the trip until the order
+  /// reaches a terminal state.
+  bool get _riderCardVisible {
     final api = _activeApiOrder;
-    final Order order = _activeOrder!;
-    if (api != null && !api.isLiveTracking) {
-      if (api.isAwaitingRider) {
-        return SliverToBoxAdapter(
-          child: AwaitingRiderCard(
-            order: order,
-            onTap: () => widget.onOpenTracking(orderId: _activeOrderId()),
-          ),
-        );
-      }
-      return const SliverToBoxAdapter(child: SizedBox.shrink());
-    }
+    return api != null &&
+        api.hasRiderAssigned &&
+        !isTerminalDelivery(api.status);
+  }
+
+  /// Sliver for the rider order status card shown only while a driver has an
+  /// accepted, active trip for the customer.
+  Widget _activeTrackerSliver() {
     return SliverToBoxAdapter(
       child: GestureDetector(
         onTap: () => widget.onOpenTracking(orderId: _activeOrderId()),
-        child: OrderTrackerCard(order: order),
+        child: OrderTrackerCard(order: _activeOrder!),
       ),
     );
   }

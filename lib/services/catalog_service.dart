@@ -156,6 +156,7 @@ List<Product> _adaptProducts(List<dynamic> raw) => raw
         icon: categoryIcon(p.category?.icon) == Icons.category_rounded
             ? Icons.inventory_2_rounded
             : categoryIcon(p.category?.icon),
+        imageUrl: p.imageUrl,
         category: p.category?.name,
       );
     })

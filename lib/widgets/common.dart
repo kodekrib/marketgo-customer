@@ -150,6 +150,47 @@ class AppScrollTab extends StatelessWidget {
   }
 }
 
+/// Network image that fills its parent and degrades to a colour-tinted icon
+/// when the URL is empty or the bytes fail to load.
+///
+/// Wrap it in a sized [ClipRRect] or a [Container] with `clipBehavior` so the
+/// image respects the surrounding corner radius.
+class RemoteImage extends StatelessWidget {
+  const RemoteImage({
+    super.key,
+    required this.url,
+    required this.fallbackIcon,
+    required this.fallbackColor,
+    this.iconSize = 28,
+    this.fit = BoxFit.cover,
+  });
+
+  final String url;
+  final IconData fallbackIcon;
+  final Color fallbackColor;
+  final double iconSize;
+  final BoxFit fit;
+
+  @override
+  Widget build(BuildContext context) {
+    final fallback = Container(
+      color: fallbackColor.withOpacity(0.12),
+      alignment: Alignment.center,
+      child: Icon(fallbackIcon, color: fallbackColor, size: iconSize),
+    );
+    if (url.isEmpty) return fallback;
+    return Image.network(
+      url,
+      fit: fit,
+      width: double.infinity,
+      height: double.infinity,
+      errorBuilder: (_, __, ___) => fallback,
+      loadingBuilder: (context, child, progress) =>
+          progress == null ? child : fallback,
+    );
+  }
+}
+
 /// Compact quantity stepper shared by the product grid and cart lines.
 class QuantityStepper extends StatelessWidget {
   const QuantityStepper({

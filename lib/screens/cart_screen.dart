@@ -118,8 +118,7 @@ class CartTab extends StatelessWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-              'Sign in to the live backend (customer@marketgo.com) to place '
-              'real orders.'),
+              'Sign in to the live backend to place real orders.'),
         ),
       );
       return;
@@ -152,6 +151,7 @@ class CartTab extends StatelessWidget {
       builder: (ctx) => _CheckoutSheet(
         service: orders,
         token: token,
+        email: auth.user?.email ?? '',
         items: items,
         total: total,
         onPlaced: (orderId) {
@@ -186,6 +186,7 @@ class _CheckoutSheet extends StatefulWidget {
   const _CheckoutSheet({
     required this.service,
     required this.token,
+    required this.email,
     required this.items,
     required this.total,
     required this.onPlaced,
@@ -193,6 +194,7 @@ class _CheckoutSheet extends StatefulWidget {
 
   final OrderService service;
   final String token;
+  final String email;
   final List<CheckoutItem> items;
   final int total;
   final ValueChanged<int> onPlaced;
@@ -247,7 +249,7 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
           widget.token,
           orderId: order.id,
           amount: order.totalAmount,
-          email: 'customer@marketgo.com',
+          email: widget.email,
         );
         if (!mounted) return;
 

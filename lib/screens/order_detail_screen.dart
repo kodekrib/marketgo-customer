@@ -207,12 +207,17 @@ class _ItemRow extends StatelessWidget {
           Container(
             width: 44,
             height: 44,
+            clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               color: CustomerApp.brandGreenLight,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.inventory_2_rounded,
-                color: Color(0xFF15803D), size: 22),
+            child: RemoteImage(
+              url: item.imageUrl,
+              fallbackIcon: Icons.inventory_2_rounded,
+              fallbackColor: const Color(0xFF15803D),
+              iconSize: 22,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(

@@ -49,6 +49,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                     icon: categoryIcon(p.category?.icon) == Icons.category_rounded
                         ? Icons.inventory_2_rounded
                         : categoryIcon(p.category?.icon),
+                    imageUrl: p.imageUrl,
                     category: p.category?.name,
                   ))
               .toList();
@@ -373,14 +374,18 @@ class _StoreProductCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: product.color.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(14),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: SizedBox(
+              width: 56,
+              height: 56,
+              child: RemoteImage(
+                url: product.imageUrl,
+                fallbackIcon: product.icon,
+                fallbackColor: product.color,
+                iconSize: 28,
+              ),
             ),
-            child: Icon(product.icon, color: product.color, size: 28),
           ),
           const SizedBox(width: 14),
           Expanded(

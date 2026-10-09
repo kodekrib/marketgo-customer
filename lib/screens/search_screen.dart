@@ -323,11 +323,17 @@ class _StoreResultRow extends StatelessWidget {
               Container(
                 width: 48,
                 height: 48,
+                clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
                   color: vendor.color.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(vendor.icon, color: vendor.color, size: 26),
+                child: RemoteImage(
+                  url: vendor.logoUrl.isNotEmpty ? vendor.logoUrl : vendor.bannerUrl,
+                  fallbackIcon: vendor.icon,
+                  fallbackColor: vendor.color,
+                  iconSize: 26,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -390,12 +396,17 @@ class _StoreSheet extends StatelessWidget {
                 Container(
                   width: 52,
                   height: 52,
+                  clipBehavior: Clip.antiAlias,
                   decoration: BoxDecoration(
                     color: vendor.color.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  child: Icon(vendor.icon,
-                      color: vendor.color, size: 28),
+                  child: RemoteImage(
+                    url: vendor.logoUrl.isNotEmpty ? vendor.logoUrl : vendor.bannerUrl,
+                    fallbackIcon: vendor.icon,
+                    fallbackColor: vendor.color,
+                    iconSize: 28,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -432,12 +443,17 @@ class _StoreSheet extends StatelessWidget {
                         Container(
                           width: 38,
                           height: 38,
+                          clipBehavior: Clip.antiAlias,
                           decoration: BoxDecoration(
                             color: p.color.withOpacity(0.12),
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child:
-                              Icon(p.icon, color: p.color, size: 20),
+                          child: RemoteImage(
+                            url: p.imageUrl,
+                            fallbackIcon: p.icon,
+                            fallbackColor: p.color,
+                            iconSize: 20,
+                          ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(

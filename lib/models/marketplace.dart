@@ -58,6 +58,7 @@ class Product {
     required this.price,
     required this.color,
     required this.icon,
+    this.imageUrl = '',
     this.tag,
     this.category,
   });
@@ -69,6 +70,7 @@ class Product {
   final int price; // whole naira units
   final Color color;
   final IconData icon;
+  final String imageUrl; // optional product photo from the vendor panel
   final String? tag; // optional promo label, e.g. "-20%"
   final String? category; // category name when sourced from the API
 }

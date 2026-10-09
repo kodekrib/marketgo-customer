@@ -69,16 +69,70 @@ class SendOtpResult {
   }
 }
 
+/// Multi-factor challenge returned by password login when a second factor is
+/// required. The code is delivered over [channels]; `devCode` is only returned
+/// when the platform has developer preview enabled.
+class MfaChallenge {
+  const MfaChallenge({
+    required this.mfaToken,
+    required this.expiresIn,
+    required this.channels,
+    this.devCode,
+  });
+
+  final String mfaToken;
+  final int expiresIn;
+  final List<String> channels;
+  final String? devCode;
+
+  factory MfaChallenge.fromJson(Map<String, dynamic> json) {
+    return MfaChallenge(
+      mfaToken: json['mfa_token'] as String? ?? '',
+      expiresIn: (json['expires_in'] as num?)?.toInt() ?? 600,
+      channels: (json['channels'] as List?)?.map((e) => '$e').toList() ??
+          const <String>[],
+      devCode: json['dev_code'] as String?,
+    );
+  }
+}
+
+/// Outcome of a password sign-in: either a full token pair or an MFA
+/// challenge the client must satisfy before tokens are issued.
+class LoginResult {
+  const LoginResult.success(this.tokens) : mfa = null;
+  const LoginResult.mfaRequired(this.mfa) : tokens = null;
+
+  final TokenPair? tokens;
+  final MfaChallenge? mfa;
+}
+
 /// Calls the marketgo-api auth endpoints.
 class AuthService {
   AuthService({ApiClient? api}) : api = api ?? ApiClient();
 
   final ApiClient api;
 
-  Future<TokenPair> signIn(String email, String password) async {
+  /// Signs in with email/password. The server may answer with either a token
+  /// pair or an MFA challenge when two-factor verification is enabled.
+  Future<LoginResult> signIn(String email, String password) async {
     final data = await api.post(
       '/api/v1/auth/login',
       body: {'email': email, 'password': password},
+    );
+    if (data['mfa_required'] == true) {
+      return LoginResult.mfaRequired(MfaChallenge.fromJson(data));
+    }
+    return LoginResult.success(TokenPair.fromJson(data));
+  }
+
+  /// Exchanges an MFA challenge token and the received code for a token pair.
+  Future<TokenPair> verifyMfa({
+    required String mfaToken,
+    required String code,
+  }) async {
+    final data = await api.post(
+      '/api/v1/auth/mfa/verify',
+      body: {'mfa_token': mfaToken, 'code': code},
     );
     return TokenPair.fromJson(data);
   }
@@ -148,20 +202,17 @@ class AuthService {
 /// Shoppers can browse the catalogue while signed out; sign-in is only
 /// required for checkout, orders and account.
 class AuthModel extends ChangeNotifier {
-  AuthModel({AuthService? service, ApiClient? api, this.onOfflineChanged})
+  AuthModel({AuthService? service, ApiClient? api})
       : _service = service ?? AuthService(api: api),
         _api = api;
 
   final AuthService _service;
   final ApiClient? _api;
 
-  /// Called whenever the network availability flips (demo session on/off) so
-  /// the app shell can short-circuit API calls sharing the [_api] client.
-  final void Function(bool offline)? onOfflineChanged;
-
   AuthUser? _user;
   String? _accessToken;
   String? _refreshToken;
+  MfaChallenge? _pendingMfa;
   bool _loading = false;
   String? _error;
 
@@ -170,32 +221,17 @@ class AuthModel extends ChangeNotifier {
   bool get loading => _loading;
   String? get error => _error;
 
+  /// The MFA challenge awaiting a code after a password sign-in that requires
+  /// a second factor. Null unless the server interrupted the login.
+  MfaChallenge? get pendingMfa => _pendingMfa;
+
   /// The bearer token used to call authenticated endpoints. Null while signed
-  /// out. Demo sessions carry a placeholder token that services treat as
-  /// offline (screens fall back to local demo data until a real login).
+  /// out.
   String? get accessToken => _accessToken;
 
   /// The shared network client so screens build services with the same offline
   /// state and base URL as this session.
   ApiClient get api => _service.api;
-
-  /// Server-less login so the app can be explored before the backend (or its
-  /// database) is up. Enters an authenticated demo session immediately.
-  void enterDemoMode() {
-    _user = const AuthUser(
-      id: 'demo-customer',
-      email: 'customer@test.marketgo',
-      name: 'Demo Customer',
-      role: 'customer',
-    );
-    _accessToken = 'demo.access';
-    _refreshToken = 'demo.refresh';
-    _loading = false;
-    _error = null;
-    _api?.isOffline = true;
-    onOfflineChanged?.call(true);
-    notifyListeners();
-  }
 
   /// Surface client-side validation messages (e.g. missing email).
   set error(String? value) {
@@ -203,15 +239,13 @@ class AuthModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> signIn(String email, String password) async {
-    _loading = true;
-    _error = null;
-    notifyListeners();
+  /// Shared post-token work: loads the profile, stores the session tokens and
+  /// flips the shared client back to online mode. Returns false (with [_error]
+  /// set) when the profile cannot be loaded.
+  Future<bool> _completeSignIn(TokenPair tokens) async {
     try {
-      final tokens = await _service.signIn(email.trim(), password);
       final user = await _service.me(tokens.accessToken);
       _api?.isOffline = false;
-      onOfflineChanged?.call(false);
       _accessToken = tokens.accessToken;
       _refreshToken = tokens.refreshToken;
       _user = user;
@@ -219,10 +253,67 @@ class AuthModel extends ChangeNotifier {
     } on ApiException catch (e) {
       _error = e.message;
       return false;
+    }
+  }
+
+  /// Signs in with email/password. Returns false without an error when the
+  /// server demands a second factor — the screen then checks [pendingMfa] and
+  /// routes to the MFA code screen.
+  Future<bool> signIn(String email, String password) async {
+    _loading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final result = await _service.signIn(email.trim(), password);
+      if (result.mfa != null) {
+        _pendingMfa = result.mfa;
+        _error = null;
+        return false;
+      }
+      _pendingMfa = null;
+      return await _completeSignIn(result.tokens!);
+    } on ApiException catch (e) {
+      _error = e.message;
+      return false;
     } finally {
       _loading = false;
       notifyListeners();
     }
+  }
+
+  /// Completes a login interrupted by an MFA challenge: verifies the code and
+  /// enters an authenticated session (same state transitions as [signIn]).
+  Future<bool> verifyMfaCode(String code) async {
+    final challenge = _pendingMfa;
+    if (challenge == null) {
+      _error = 'No verification code was requested.';
+      notifyListeners();
+      return false;
+    }
+    _loading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final tokens = await _service.verifyMfa(
+        mfaToken: challenge.mfaToken,
+        code: code,
+      );
+      _pendingMfa = null;
+      return await _completeSignIn(tokens);
+    } on ApiException catch (e) {
+      _error = e.message;
+      return false;
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Discards a pending MFA challenge (e.g. the shopper navigated back).
+  void cancelMfa() {
+    _pendingMfa = null;
+    _error = null;
+    notifyListeners();
   }
 
   /// Requests an OTP code for the given phone. Loading/error state for the
@@ -240,13 +331,7 @@ class AuthModel extends ChangeNotifier {
     try {
       final tokens =
           await _service.verifyOtp(phone: phone, code: code, role: 'customer');
-      final user = await _service.me(tokens.accessToken);
-      _api?.isOffline = false;
-      onOfflineChanged?.call(false);
-      _accessToken = tokens.accessToken;
-      _refreshToken = tokens.refreshToken;
-      _user = user;
-      return true;
+      return await _completeSignIn(tokens);
     } on ApiException catch (e) {
       _error = e.message;
       return false;
