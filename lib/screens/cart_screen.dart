@@ -34,7 +34,7 @@ class CartTab extends StatelessWidget {
   final void Function({int? orderId, int? courierId})? onPlaced;
 
   static const int _freeDeliveryThreshold = 100000;
-  static const int _deliveryFee = 1500;
+  static const int _deliveryFee = 500;
 
   /// Progressive service fee tiers (mirrors backend config).
   static const _serviceFeeTiers = [
