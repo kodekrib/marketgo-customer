@@ -59,7 +59,10 @@ class _TrackingScreenState extends State<TrackingScreen> {
     final auth = widget.auth;
     if (auth == null || auth.accessToken == null) return;
 
-    _ws = CustomerWebSocket(api: auth.api);
+    _ws = CustomerWebSocket(
+      api: auth.api,
+      tokenProvider: () => widget.auth?.accessToken,
+    );
     _ws!.connect(auth.accessToken!);
 
     // Listen for real-time rider GPS updates.
@@ -187,6 +190,12 @@ class _TrackingScreenState extends State<TrackingScreen> {
                       contactName: riderName,
                       contactSubtitle: 'MarketGO Rider',
                       contactInitials: _initials(riderName),
+                      deliveryId: delivery?.id,
+                      token: widget.auth?.accessToken,
+                      currentUserId:
+                          int.tryParse(widget.auth?.user?.id ?? ''),
+                      ws: _ws,
+                      api: widget.auth?.api,
                     ),
                   ),
                 );

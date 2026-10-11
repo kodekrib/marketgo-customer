@@ -62,8 +62,10 @@ class _RiderPickerScreenState extends State<RiderPickerScreen> {
   void _connect() {
     final token = widget.token;
     if (token.isEmpty) return;
-    _ws = CustomerWebSocket(api: widget.auth.api)
-      ..connect(token);
+    _ws = CustomerWebSocket(
+      api: widget.auth.api,
+      tokenProvider: () => widget.auth.accessToken,
+    )..connect(token);
     _wsSub = _ws!.requestOffer.listen((event) {
       final payload = event.payload;
       if (payload is! Map<String, dynamic>) return;

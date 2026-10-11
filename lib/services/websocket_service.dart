@@ -27,10 +27,16 @@ class WsEvent {
 /// - `delivery.status_changed` — delivery lifecycle transitions
 /// - `order.status_changed` — order status transitions
 /// - `notification.new` — in-app notifications
+/// - `chat.message` — new messages on a delivery thread
 class CustomerWebSocket {
-  CustomerWebSocket({required this.api});
+  CustomerWebSocket({required this.api, this.tokenProvider});
 
   final ApiClient api;
+
+  /// Returns the freshest access token before each (re)connect attempt. When
+  /// null, the token captured in [connect] is used. Point this at the session
+  /// so a reconnection after the 15-minute expiry keeps working.
+  final String? Function()? tokenProvider;
 
   WebSocketChannel? _channel;
   Timer? _reconnectTimer;
@@ -46,6 +52,9 @@ class CustomerWebSocket {
   Stream<WsEvent> get orderStatus => events.where((e) => e.type == 'order.status_changed');
   Stream<WsEvent> get notification => events.where((e) => e.type == 'notification.new');
 
+  /// New messages on a delivery chat thread (`chat.message`).
+  Stream<WsEvent> get chatMessage => events.where((e) => e.type == 'chat.message');
+
   /// Live rider bids on a pick-a-rider delivery request (`request.offer`).
   Stream<WsEvent> get requestOffer => events.where((e) => e.type == 'request.offer');
 
@@ -59,10 +68,14 @@ class CustomerWebSocket {
   }
 
   void _doConnect() {
-    if (_token == null || _intentionalClose) return;
+    if (_intentionalClose) return;
+    // Prefer the session's live token; it is only null when signed out, in
+    // which case there is nothing to connect with.
+    final token = tokenProvider?.call() ?? _token;
+    if (token == null || token.isEmpty) return;
 
     final wsUrl = api.baseUrl.replaceFirst('http', 'ws');
-    final uri = Uri.parse('$wsUrl/ws?token=$_token');
+    final uri = Uri.parse('$wsUrl/ws?token=$token');
 
     try {
       _channel = WebSocketChannel.connect(uri);

@@ -204,7 +204,19 @@ class AuthService {
 class AuthModel extends ChangeNotifier {
   AuthModel({AuthService? service, ApiClient? api})
       : _service = service ?? AuthService(api: api),
-        _api = api;
+        _api = api {
+    // Transparent token refresh: the shared client consults this session for
+    // the live token pair and retries once when the access token expires.
+    _api?.tokenSource = TokenSource(
+      getAccessToken: () => _accessToken,
+      getRefreshToken: () => _refreshToken,
+      store: ({required String accessToken, required String refreshToken}) {
+        _accessToken = accessToken;
+        _refreshToken = refreshToken;
+      },
+      onExpired: _expireSession,
+    );
+  }
 
   final AuthService _service;
   final ApiClient? _api;
@@ -339,6 +351,17 @@ class AuthModel extends ChangeNotifier {
       _loading = false;
       notifyListeners();
     }
+  }
+
+  /// Clears the session without a network call, used when a token refresh is
+  /// rejected (revoked refresh token, disabled account, or server restart
+  /// which rotates the signing key).
+  void _expireSession() {
+    _user = null;
+    _accessToken = null;
+    _refreshToken = null;
+    _error = 'Your session has expired. Please sign in again.';
+    notifyListeners();
   }
 
   Future<void> signOut() async {

@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../app.dart';
 import '../models/marketplace.dart';
+import '../services/api_client.dart';
+import '../services/chat_service.dart';
+import '../services/websocket_service.dart';
 
 class _ChatMessage {
   const _ChatMessage({
@@ -16,10 +19,13 @@ class _ChatMessage {
   final String time;
 }
 
-/// Customer chat UI for messaging the rider / store while an order is live.
+/// Customer chat UI for messaging the rider while a delivery is live.
 ///
-/// Pure UI + local mock replies for now; production swaps the [send] function
-/// for the realtime chat endpoint.
+/// When [deliveryId], [token] and [ws] are provided the screen runs against
+/// the realtime backend: history is loaded from /api/v1/chat/:deliveryId,
+/// sends go over the same endpoint, and inbound messages arrive live as
+/// `chat.message` WebSocket events. Without those the screen keeps its
+/// local mock behaviour (used by card previews that have no delivery yet).
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
     super.key,
@@ -28,6 +34,11 @@ class ChatScreen extends StatefulWidget {
     this.contactSubtitle = 'MarketGO Rider',
     this.contactInitials = 'DR',
     this.send,
+    this.deliveryId,
+    this.token,
+    this.currentUserId,
+    this.ws,
+    this.api,
   });
 
   /// The live order being chatted about (shown in a header banner).
@@ -39,6 +50,17 @@ class ChatScreen extends StatefulWidget {
   /// Overridable send hook; defaults to a local mock reply.
   final Future<String> Function(String message)? send;
 
+  /// The delivery whose thread this screen shows. Null keeps mock mode.
+  final int? deliveryId;
+  final String? token;
+
+  /// The signed-in customer's numeric id, used to align history bubbles.
+  final int? currentUserId;
+
+  /// Shared WebSocket connection to receive inbound messages in real time.
+  final CustomerWebSocket? ws;
+  final ApiClient? api;
+
   @override
   State<ChatScreen> createState() => _ChatScreenState();
 }
@@ -49,6 +71,13 @@ class _ChatScreenState extends State<ChatScreen> {
   final List<_ChatMessage> _messages = [];
   bool _typing = false;
   Timer? _replyTimer;
+  ChatService? _service;
+  StreamSubscription<WsEvent>? _chatSub;
+
+  bool get _live =>
+      widget.deliveryId != null &&
+      widget.token != null &&
+      widget.token!.isNotEmpty;
 
   String get _now {
     final t = TimeOfDay.now();
@@ -58,34 +87,103 @@ class _ChatScreenState extends State<ChatScreen> {
     return '$h:$m $ap';
   }
 
+  String _formatTime(DateTime time) {
+    final local = time.toLocal();
+    var h = local.hour % 12;
+    if (h == 0) h = 12;
+    final m = local.minute.toString().padLeft(2, '0');
+    final ap = local.hour >= 12 ? 'PM' : 'AM';
+    return '$h:$m $ap';
+  }
+
   @override
   void initState() {
     super.initState();
-    _messages.add(_ChatMessage(
-      text: 'Hi! I\'m on my way with your order. Any questions, just ask.',
-      fromMe: false,
-      time: _now,
-    ));
+    if (_live) {
+      _service = ChatService(api: widget.api);
+      _watchInbound();
+      _loadHistory();
+    } else {
+      _messages.add(_ChatMessage(
+        text: 'Hi! I\'m on my way with your order. Any questions, just ask.',
+        fromMe: false,
+        time: _now,
+      ));
+    }
   }
 
-  @override
-  void dispose() {
-    _replyTimer?.cancel();
-    _input.dispose();
-    _scroll.dispose();
-    super.dispose();
+  void _watchInbound() {
+    final ws = widget.ws;
+    if (ws == null) return;
+    _chatSub = ws.chatMessage.listen((event) {
+      if (!mounted) return;
+      final payload = event.payload;
+      if (payload is! Map<String, dynamic>) return;
+      final deliveryId = (payload['delivery_id'] as num?)?.toInt();
+      if (deliveryId == null || deliveryId != widget.deliveryId) return;
+      setState(() {
+        _messages.add(_ChatMessage(
+          text: payload['body'] as String? ?? '',
+          fromMe: false,
+          time: _formatTime(
+            DateTime.tryParse(payload['created_at'] as String? ?? '') ??
+                DateTime.now(),
+          ),
+        ));
+      });
+      _scrollToBottom();
+    });
   }
 
-  void _send() {
+  Future<void> _loadHistory() async {
+    final token = widget.token!;
+    final deliveryId = widget.deliveryId!;
+    try {
+      final (_, history) =
+          await _service!.conversation(token, deliveryId);
+      if (!mounted) return;
+      setState(() {
+        for (final m in history) {
+          _messages.add(_ChatMessage(
+            text: m.body,
+            fromMe: m.senderId == widget.currentUserId,
+            time: _formatTime(m.createdAt),
+          ));
+        }
+      });
+      _scrollToBottom();
+    } on ApiException catch (e) {
+      if (e.statusCode == 404 || e.statusCode == 409) return;
+      _toast('Couldn\'t load messages: ${e.message}');
+    } catch (_) {
+      _toast('Couldn\'t load messages.');
+    }
+  }
+
+  Future<void> _send() async {
     final text = _input.text.trim();
     if (text.isEmpty) return;
     _input.clear();
     setState(() {
       _messages.add(_ChatMessage(text: text, fromMe: true, time: _now));
-      _typing = true;
     });
     _scrollToBottom();
 
+    if (_live) {
+      try {
+        await _service!.send(widget.token!, widget.deliveryId!, text);
+      } on ApiException catch (e) {
+        // Restore the draft on failure so the customer doesn't lose it.
+        _input.text = text;
+        _toast('Message failed: ${e.message}');
+      } catch (_) {
+        _input.text = text;
+        _toast('Message failed. Try again.');
+      }
+      return;
+    }
+
+    _typing = true;
     _replyTimer?.cancel();
     _replyTimer = Timer(const Duration(milliseconds: 1400), () {
       if (!mounted) return;
@@ -103,6 +201,13 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+  void _toast(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scroll.hasClients) return;
@@ -112,6 +217,15 @@ class _ChatScreenState extends State<ChatScreen> {
         curve: Curves.easeOut,
       );
     });
+  }
+
+  @override
+  void dispose() {
+    _replyTimer?.cancel();
+    _chatSub?.cancel();
+    _input.dispose();
+    _scroll.dispose();
+    super.dispose();
   }
 
   @override

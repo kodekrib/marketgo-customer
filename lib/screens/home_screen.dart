@@ -272,7 +272,10 @@ class _HomeTabState extends State<_HomeTab> {
   void _connectStatusUpdates() {
     final token = widget.auth.accessToken;
     if (token == null || token == 'demo.access') return;
-    _ws = CustomerWebSocket(api: widget.auth.api);
+    _ws = CustomerWebSocket(
+      api: widget.auth.api,
+      tokenProvider: () => widget.auth.accessToken,
+    );
     _ws!.connect(token);
     _wsSub = _ws!.events
         .where((e) =>
