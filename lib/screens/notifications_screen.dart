@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../app.dart';
 import '../services/auth_service.dart';
 import '../services/notification_service.dart';
+import '../widgets/common.dart';
 
 /// Notifications center — delivery updates, promos and wallet notices.
 /// Loads real notifications from the backend; falls back to demo placeholders
