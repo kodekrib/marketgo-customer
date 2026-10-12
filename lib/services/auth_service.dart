@@ -255,14 +255,21 @@ class AuthModel extends ChangeNotifier {
   /// flips the shared client back to online mode. Returns false (with [_error]
   /// set) when the profile cannot be loaded.
   Future<bool> _completeSignIn(TokenPair tokens) async {
+    // Store the fresh pair before loading the profile: the shared client
+    // stamps the live token onto authenticated requests, so `me()` must see
+    // this new token (and be able to refresh it) rather than the old one.
+    _accessToken = tokens.accessToken;
+    _refreshToken = tokens.refreshToken;
     try {
       final user = await _service.me(tokens.accessToken);
       _api?.isOffline = false;
-      _accessToken = tokens.accessToken;
-      _refreshToken = tokens.refreshToken;
       _user = user;
       return true;
     } on ApiException catch (e) {
+      // Roll back the half-established session so a failed profile load does
+      // not leave dangling tokens behind.
+      _accessToken = null;
+      _refreshToken = null;
       _error = e.message;
       return false;
     }

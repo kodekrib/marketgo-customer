@@ -134,14 +134,19 @@ class ApiClient {
     var requestHeaders = {'Content-Type': 'application/json', ...?headers};
 
     // Stamp the live access token onto authenticated requests, overriding any
-    // stale token the caller captured in its local variable.
+    // stale token the caller captured in its local variable. When the session
+    // has no live token yet (e.g. the profile call made mid sign-in, or a
+    // best-effort logout after the session was cleared) keep the caller's
+    // header instead of blanking it to an empty bearer.
     final needsAuth = headers?.containsKey('Authorization') ?? false;
     if (needsAuth) {
       final token = tokenSource?.accessToken;
-      requestHeaders = {
-        ...requestHeaders,
-        'Authorization': token == null || token.isEmpty ? 'Bearer ' : 'Bearer $token',
-      };
+      if (token != null && token.isNotEmpty) {
+        requestHeaders = {
+          ...requestHeaders,
+          'Authorization': 'Bearer $token',
+        };
+      }
     }
 
     var res = await _send(method, uri, requestHeaders, body);
