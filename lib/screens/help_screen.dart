@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../app.dart';
 import '../models/faq.dart';
 import '../services/faq_service.dart';
@@ -83,7 +84,8 @@ class _HelpScreenState extends State<HelpScreen> {
                 child: _ContactCard(
                   icon: Icons.phone_outlined,
                   label: 'Call us',
-                  onTap: () => _toast('Support line coming soon.'),
+                  launchUri: Uri(scheme: 'tel', path: '1800MARKETGO'),
+                  labelText: 'Call us',
                 ),
               ),
               const SizedBox(width: 10),
@@ -91,7 +93,8 @@ class _HelpScreenState extends State<HelpScreen> {
                 child: _ContactCard(
                   icon: Icons.email_outlined,
                   label: 'Email',
-                  onTap: () => _toast('Email support coming soon.'),
+                  launchUri: Uri(scheme: 'mailto', path: 'support@marketgo.io'),
+                  labelText: 'Email',
                 ),
               ),
               const SizedBox(width: 10),
@@ -99,7 +102,8 @@ class _HelpScreenState extends State<HelpScreen> {
                 child: _ContactCard(
                   icon: Icons.chat_bubble_outline_rounded,
                   label: 'Chat',
-                  onTap: () => _toast('Live chat coming soon.'),
+                  launchUri: Uri(scheme: 'https', host: 'marketgo.io', path: 'live-chat'),
+                  labelText: 'Chat',
                 ),
               ),
             ],
@@ -133,17 +137,19 @@ class _ContactCard extends StatelessWidget {
   const _ContactCard({
     required this.icon,
     required this.label,
-    required this.onTap,
+    required this.launchUri,
+    required this.labelText,
   });
 
   final IconData icon;
   final String label;
-  final VoidCallback onTap;
+  final Uri launchUri;
+  final String labelText;
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: onTap,
+      onTap: () => _launch(),
       borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
@@ -155,13 +161,17 @@ class _ContactCard extends StatelessWidget {
           children: [
             Icon(icon, color: CustomerApp.brandGreenDark),
             const SizedBox(height: 8),
-            Text(label,
+            Text(labelText,
                 style: const TextStyle(
                     fontSize: 12, fontWeight: FontWeight.w700)),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _launch() async {
+    await launchUrl(launchUri, mode: LaunchMode.externalApplication);
   }
 }
 
