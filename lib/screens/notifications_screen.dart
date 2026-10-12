@@ -79,9 +79,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               ? _buildDemoList(theme)
               : notifs.isEmpty
                   ? Center(
-                      child: Text(
-                        'No notifications yet.',
-                        style: theme.textTheme.bodyMedium,
+                      child: EmptyState(
+                        icon: Icons.notifications_none_rounded,
+                        title: 'No notifications yet',
+                        message: 'We’ll let you know when there’s something new.',
                       ),
                     )
                   : _buildRealList(notifs, theme),
@@ -101,7 +102,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: n.isRead ? Colors.white : const Color(0xFFF0FDF4),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(CustomerApp.radiusCard),
+            border: Border.all(color: CustomerApp.hairline),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,

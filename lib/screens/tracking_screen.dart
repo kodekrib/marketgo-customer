@@ -171,7 +171,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
               top: MediaQuery.of(context).padding.top + 64,
               left: 16,
               right: 16,
-              child: _OfflineBanner(message: _error!),
+              child: ErrorBanner(message: _error!),
             ),
           Positioned(
             left: 16,
@@ -644,36 +644,3 @@ class _RateRiderSheetState extends State<_RateRiderSheet> {
   }
 }
 
-class _OfflineBanner extends StatelessWidget {
-  const _OfflineBanner({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF3CD),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE7C464)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.info_outline, size: 16, color: Color(0xFF8A6D1A)),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              message,
-              maxLines: 2,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Color(0xFF6B5504),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

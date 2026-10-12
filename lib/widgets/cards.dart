@@ -410,91 +410,292 @@ class CartLineItem extends StatelessWidget {
   }
 }
 
-/// Order row shown in the orders tab (ecommerce style — tappable to open the
-/// full order-detail screen with the live status card).
+/// Premium order row shown in the orders tab — a store avatar, live status,
+/// item preview and total, tappable to open the full order-detail screen.
 class OrderCard extends StatelessWidget {
-  const OrderCard({super.key, required this.order, this.onTap, this.onTrack});
+  const OrderCard({
+    super.key,
+    required this.order,
+    this.onTap,
+    this.onTrack,
+    this.thumbUrls = const <String>[],
+    this.itemCount,
+  });
 
   final Order order;
   final VoidCallback? onTap;
   final VoidCallback? onTrack;
+
+  /// Optional product thumbnails (from the order's line items) rendered as a
+  /// preview strip when available.
+  final List<String> thumbUrls;
+
+  /// Optional number of line items, shown alongside the preview.
+  final int? itemCount;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(22),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.only(bottom: 14),
         decoration: BoxDecoration(
           color: CustomerApp.surface,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: const Color(0xFFEDEFF3)),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
             ),
           ],
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: order.color.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(order.icon, color: order.color),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      StoreAvatar(vendor: order.vendor),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              order.vendor,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleLarge
+                                  ?.copyWith(fontSize: 15.5),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              '${order.id} · ${order.meta}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodyMedium
+                                  ?.copyWith(fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                       StatusChip(order.status),
-                      const Spacer(),
-                      PriceText(order.amount, size: 13),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(order.vendor,
-                      style: theme.textTheme.titleLarge?.copyWith(fontSize: 15)),
-                  Text(order.summary,
-                      style: theme.textTheme.bodyMedium?.copyWith(fontSize: 12)),
-                  Text(order.meta,
-                      style: theme.textTheme.bodyMedium?.copyWith(fontSize: 11)),
+                  const SizedBox(height: 14),
+                  _OrderItemPreview(
+                    order: order,
+                    thumbUrls: thumbUrls,
+                    itemCount: itemCount,
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1, thickness: 1, color: Color(0xFFF1F2F5)),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 10, 10),
+              child: Row(
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Total',
+                          style: theme.textTheme.bodyMedium
+                              ?.copyWith(fontSize: 11)),
+                      const SizedBox(height: 1),
+                      PriceText(order.amount, size: 16),
+                    ],
+                  ),
+                  const Spacer(),
                   if (onTrack != null)
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: onTrack,
-                        style: TextButton.styleFrom(
-                          foregroundColor: CustomerApp.brandGreenDark,
-                          visualDensity: VisualDensity.compact,
-                        ),
-                        child: const Text('Track order'),
-                      ),
-                    ),
-                  if (onTrack == null && onTap != null)
-                    const Align(
-                      alignment: Alignment.centerRight,
-                      child: Padding(
-                        padding: EdgeInsets.only(top: 6),
-                        child: Icon(Icons.chevron_right_rounded,
-                            size: 20, color: Color(0xFF9AA1AA)),
-                      ),
-                    ),
+                    _TrackButton(onTap: onTrack!)
+                  else
+                    _DetailsButton(onTap: onTap),
                 ],
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Accent-tinted circle with the store's initial, giving every order a stable
+/// visual identity derived from the vendor name.
+class StoreAvatar extends StatelessWidget {
+  const StoreAvatar({super.key, required this.vendor, this.size = 46});
+
+  final String vendor;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final trimmed = vendor.trim();
+    final initial = trimmed.isEmpty ? '#' : trimmed[0].toUpperCase();
+    final accent = colorFor(trimmed.isEmpty ? 'MarketGO' : trimmed);
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: accent.withOpacity(0.14),
+        borderRadius: BorderRadius.circular(size * 0.32),
+      ),
+      child: Text(
+        initial,
+        style: TextStyle(
+          color: accent,
+          fontWeight: FontWeight.w800,
+          fontSize: size * 0.42,
+        ),
+      ),
+    );
+  }
+}
+
+class _OrderItemPreview extends StatelessWidget {
+  const _OrderItemPreview({
+    required this.order,
+    required this.thumbUrls,
+    this.itemCount,
+  });
+
+  final Order order;
+  final List<String> thumbUrls;
+  final int? itemCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final thumbs = thumbUrls.where((u) => u.isNotEmpty).take(3).toList();
+    if (thumbs.isNotEmpty) {
+      return Row(
+        children: [
+          for (final u in thumbs)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Container(
+                width: 40,
+                height: 40,
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: CustomerApp.brandGreenLight,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: RemoteImage(
+                  url: u,
+                  fallbackIcon: Icons.inventory_2_rounded,
+                  fallbackColor: const Color(0xFF15803D),
+                  iconSize: 18,
+                ),
+              ),
+            ),
+          const SizedBox(width: 2),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  order.summary,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600, fontSize: 12.5),
+                ),
+                if (itemCount != null && itemCount! > 0) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    '$itemCount ${itemCount == 1 ? 'item' : 'items'}',
+                    style: theme.textTheme.bodyMedium?.copyWith(fontSize: 11),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+    return Row(
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: order.color.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(order.icon, color: order.color, size: 20),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            order.summary,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodyMedium?.copyWith(fontSize: 12.5),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TrackButton extends StatelessWidget {
+  const _TrackButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton.icon(
+      onPressed: onTap,
+      icon: const Icon(Icons.near_me_rounded, size: 16),
+      label: const Text('Track'),
+      style: FilledButton.styleFrom(
+        backgroundColor: CustomerApp.brandGreen,
+        foregroundColor: Colors.white,
+        minimumSize: const Size(0, 44),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
+      ),
+    );
+  }
+}
+
+class _DetailsButton extends StatelessWidget {
+  const _DetailsButton({this.onTap});
+
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton(
+      onPressed: onTap,
+      style: TextButton.styleFrom(
+        foregroundColor: CustomerApp.brandGreenDark,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        minimumSize: const Size(0, 44),
+        textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('View details'),
+          SizedBox(width: 2),
+          Icon(Icons.chevron_right_rounded, size: 18),
+        ],
       ),
     );
   }
@@ -703,6 +904,86 @@ class OrderTrackerCard extends StatelessWidget {
 int statusIndex(String status) {
   final i = orderStatuses.indexOf(status);
   return i < 0 ? 0 : i;
+}
+
+/// Horizontal delivery progress timeline (Confirmed → Preparing → In transit →
+/// Delivered) used on the order-detail screen.
+class OrderProgressRail extends StatelessWidget {
+  const OrderProgressRail({super.key, required this.current});
+
+  final int current;
+
+  static const List<(IconData, String)> _steps = [
+    (Icons.receipt_long_rounded, 'Confirmed'),
+    (Icons.restaurant_rounded, 'Preparing'),
+    (Icons.delivery_dining_rounded, 'In transit'),
+    (Icons.home_rounded, 'Delivered'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var i = 0; i < _steps.length; i++) ...[
+          if (i > 0)
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 15),
+                child: Container(
+                  height: 2.5,
+                  decoration: BoxDecoration(
+                    color: i <= current
+                        ? CustomerApp.brandGreen
+                        : const Color(0xFFE2E5EA),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+            ),
+          Column(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: i <= current
+                      ? CustomerApp.brandGreen
+                      : const Color(0xFFF1F2F5),
+                ),
+                child: Icon(
+                  _steps[i].$1,
+                  size: 17,
+                  color: i <= current
+                      ? Colors.white
+                      : const Color(0xFF9AA1AA),
+                ),
+              ),
+              const SizedBox(height: 6),
+              SizedBox(
+                width: 62,
+                child: Text(
+                  _steps[i].$2,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 10,
+                    height: 1.1,
+                    fontWeight:
+                        i <= current ? FontWeight.w800 : FontWeight.w600,
+                    color: i <= current
+                        ? CustomerApp.ink
+                        : const Color(0xFF9AA1AA),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
 }
 
 class _OrderStageRail extends StatelessWidget {

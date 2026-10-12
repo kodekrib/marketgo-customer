@@ -47,37 +47,63 @@ class OrderDetailScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
         children: [
-          // Header: status chip + placed date
+          // Header: store, status, placed date and delivery progress.
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
               color: CustomerApp.surface,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        order.id,
-                        style: theme.textTheme.titleLarge?.copyWith(fontSize: 18),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        order.vendor,
-                        style: theme.textTheme.bodyMedium?.copyWith(fontSize: 13),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Placed ${_placedLabel()}',
-                        style: theme.textTheme.bodyMedium?.copyWith(fontSize: 12),
-                      ),
-                    ],
-                  ),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: const Color(0xFFEDEFF3)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
                 ),
-                StatusChip(order.status),
+              ],
+            ),
+            child: Column(
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    StoreAvatar(vendor: order.vendor, size: 50),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            order.id,
+                            style: theme.textTheme.titleLarge
+                                ?.copyWith(fontSize: 18),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            order.vendor,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium
+                                ?.copyWith(fontSize: 13),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            'Placed ${_placedLabel()}',
+                            style: theme.textTheme.bodyMedium
+                                ?.copyWith(fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    StatusChip(order.status),
+                  ],
+                ),
+                if (order.status != 'Delivered' &&
+                    order.status != 'Cancelled') ...[
+                  const SizedBox(height: 20),
+                  OrderProgressRail(current: statusIndex(order.status)),
+                ],
               ],
             ),
           ),
@@ -128,39 +154,67 @@ class OrderDetailScreen extends StatelessWidget {
             ),
           // Totals
           const SectionHeader('Payment'),
-          _TotalRow(label: 'Subtotal', value: _subtotal()),
-          _TotalRow(label: 'Delivery fee', value: apiOrder?.deliveryFee.round() ?? 0),
-          if ((apiOrder?.serviceFee ?? 0) > 0)
-            _TotalRow(label: 'Service fee', value: apiOrder!.serviceFee.round()),
-          const Divider(height: 24),
-          _TotalRow(label: 'Total', value: order.amount, bold: true),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: CustomerApp.surface,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFEDEFF3)),
+            ),
+            child: Column(
+              children: [
+                _TotalRow(label: 'Subtotal', value: _subtotal()),
+                _TotalRow(
+                    label: 'Delivery fee',
+                    value: apiOrder?.deliveryFee.round() ?? 0),
+                if ((apiOrder?.serviceFee ?? 0) > 0)
+                  _TotalRow(
+                      label: 'Service fee',
+                      value: apiOrder!.serviceFee.round()),
+                const Divider(height: 24),
+                _TotalRow(label: 'Total', value: order.amount, bold: true),
+              ],
+            ),
+          ),
           // Delivery details
           const SectionHeader('Delivery'),
-          _DeliveryRow(
-            icon: Icons.place_rounded,
-            title: 'Deliver to',
-            subtitle: apiOrder?.deliveryAddress ?? order.meta,
+          Container(
+            decoration: BoxDecoration(
+              color: CustomerApp.surface,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFEDEFF3)),
+            ),
+            child: Column(
+              children: [
+                _DeliveryRow(
+                  first: true,
+                  icon: Icons.place_rounded,
+                  title: 'Deliver to',
+                  subtitle: apiOrder?.deliveryAddress ?? order.meta,
+                ),
+                if (apiOrder != null && apiOrder!.phone.isNotEmpty)
+                  _DeliveryRow(
+                    icon: Icons.phone_outlined,
+                    title: 'Contact',
+                    subtitle: apiOrder!.phone,
+                  ),
+                if (apiOrder?.delivery != null &&
+                    apiOrder!.delivery!.riderName.isNotEmpty)
+                  _DeliveryRow(
+                    icon: Icons.man_rounded,
+                    title: 'Rider',
+                    subtitle: apiOrder!.delivery!.riderName,
+                  ),
+                if (apiOrder?.delivery != null &&
+                    apiOrder!.delivery!.storeName.isNotEmpty)
+                  _DeliveryRow(
+                    icon: Icons.storefront_outlined,
+                    title: 'Store',
+                    subtitle: apiOrder!.delivery!.storeName,
+                  ),
+              ],
+            ),
           ),
-          if (apiOrder != null && apiOrder!.phone.isNotEmpty)
-            _DeliveryRow(
-              icon: Icons.phone_outlined,
-              title: 'Contact',
-              subtitle: apiOrder!.phone,
-            ),
-          if (apiOrder?.delivery != null &&
-              apiOrder!.delivery!.riderName.isNotEmpty)
-            _DeliveryRow(
-              icon: Icons.man_rounded,
-              title: 'Rider',
-              subtitle: apiOrder!.delivery!.riderName,
-            ),
-          if (apiOrder?.delivery != null &&
-              apiOrder!.delivery!.storeName.isNotEmpty)
-            _DeliveryRow(
-              icon: Icons.storefront_outlined,
-              title: 'Store',
-              subtitle: apiOrder!.delivery!.storeName,
-            ),
         ],
       ),
     );
@@ -281,40 +335,43 @@ class _DeliveryRow extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.subtitle,
+    this.first = false,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
+  final bool first;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: CustomerApp.surface,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: CustomerApp.brandGreenDark),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title,
-                    style: theme.textTheme.bodyMedium?.copyWith(fontSize: 11)),
-                Text(subtitle,
-                    style: theme.textTheme.bodyMedium
-                        ?.copyWith(fontWeight: FontWeight.w600)),
-              ],
-            ),
+    return Column(
+      children: [
+        if (!first)
+          const Divider(height: 1, thickness: 1, color: Color(0xFFF1F2F5)),
+        Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Icon(icon, size: 20, color: CustomerApp.brandGreenDark),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: theme.textTheme.bodyMedium?.copyWith(fontSize: 11)),
+                    Text(subtitle,
+                        style: theme.textTheme.bodyMedium
+                            ?.copyWith(fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

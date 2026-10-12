@@ -65,16 +65,11 @@ class _HomeScreenState extends State<HomeScreen> {
       listenable: Listenable.merge([_cart, _auth]),
       builder: (context, _) {
         return Scaffold(
-          body: Stack(
-            children: [
-              _buildTab(_tabIndex),
-              Positioned(
-                right: 16,
-                top: MediaQuery.of(context).padding.top + 8,
-                child: _NotificationsButton(auth: _auth),
-              ),
-            ],
-          ),
+          // Notifications live in the home tab's own header row (address on the
+          // left, bell on the right). A floating overlay collided with the
+          // address, the courier "Request" button and the account profile card,
+          // so the bell is no longer stacked over the tab content.
+          body: _buildTab(_tabIndex),
           bottomNavigationBar: _CustomerNav(
             currentIndex: _tabIndex,
             cartCount: _cart.quantity,
@@ -428,31 +423,30 @@ class _GreetingHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      child: Row(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  auth.isAuthenticated
-                      ? 'Good morning, ${auth.user!.firstName}'
-                      : 'Good morning!',
-                  style: theme.textTheme.titleLarge,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Choose a store to shop from and get it delivered '
-                  'fast to your door.',
-                  style: theme.textTheme.bodyMedium,
-                ),
-              ],
-            ),
+          Row(
+            children: [
+              _DeliveryPill(),
+              const Spacer(),
+              _NotificationsButton(auth: auth),
+            ],
           ),
-          const SizedBox(width: 12),
-          _DeliveryPill(),
+          const SizedBox(height: 16),
+          Text(
+            auth.isAuthenticated
+                ? 'Good morning, ${auth.user!.firstName}'
+                : 'Good morning!',
+            style: theme.textTheme.titleLarge,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Choose a store to shop from and get it delivered '
+            'fast to your door.',
+            style: theme.textTheme.bodyMedium,
+          ),
         ],
       ),
     );

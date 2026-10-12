@@ -5,6 +5,7 @@ import 'delivery_addresses_screen.dart';
 import 'favourites_screen.dart';
 import 'help_screen.dart';
 import 'payment_methods_screen.dart';
+import '../widgets/common.dart';
 
 /// Account tab — shows the customer profile when signed in, otherwise a
 /// sign-in prompt.
@@ -16,25 +17,24 @@ class AccountTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomScrollView(
+    return AppScrollTab(
       slivers: [
-        SliverToBoxAdapter(
-          child: SizedBox(height: MediaQuery.of(context).padding.top + 8),
-        ),
         if (!auth.isAuthenticated)
           SliverFillRemaining(
             hasScrollBody: false,
-            child: _AuthPrompt(
+            child: EmptyState(
+              icon: Icons.lock_outline_rounded,
               title: 'Sign in to your account',
-              subtitle:
+              message:
                   'Manage your addresses, payment methods and preferences.',
-              onSignIn: onSignIn,
+              actionLabel: 'Sign in',
+              onAction: onSignIn,
             ),
           )
         else ...[
           SliverToBoxAdapter(child: _ProfileCard(auth: auth)),
           const SliverToBoxAdapter(child: _AccountMenu()),
-          const SliverToBoxAdapter(child: SizedBox(height: 28)),
+          const SliverToBoxAdapter(child: SizedBox(height: 32)),
         ],
       ],
     );
@@ -107,7 +107,8 @@ class _ProfileCard extends StatelessWidget {
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: CustomerApp.surface,
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(CustomerApp.radiusCard),
+          border: Border.all(color: CustomerApp.hairline),
         ),
         child: Column(
           children: [
@@ -187,7 +188,8 @@ class _AccountMenu extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: CustomerApp.surface,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(CustomerApp.radiusCard),
+          border: Border.all(color: CustomerApp.hairline),
         ),
         child: Column(
           children: rows.map((row) {
@@ -200,7 +202,7 @@ class _AccountMenu extends StatelessWidget {
                 }
                 _openScreen(context, label);
               },
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(CustomerApp.radiusCard),
               child: Padding(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -266,14 +268,16 @@ class _AccountMenu extends StatelessWidget {
               const Text('Sign out of MarketGO?',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
               const SizedBox(height: 6),
-              const Text('You will be returned to the browse-only mode.',
-                  textAlign: TextAlign.center),
+              Text('You will be returned to the browse-only mode.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium),
               const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFEF4444)),
+                      backgroundColor: const Color(0xFFEF4444),
+                      foregroundColor: Colors.white),
                   onPressed: () {
                     auth.signOut();
                     Navigator.of(ctx).pop();

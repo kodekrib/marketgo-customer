@@ -67,30 +67,25 @@ class _CourierTabState extends State<CourierTab> {
     }
   }
 
+  void _openTracking(ApiDelivery delivery) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => TrackingScreen(auth: widget.auth, courierId: delivery.id),
+      ),
+    );
+  }
+
   void _requestCourier() {
     final token = widget.auth.accessToken;
     if (token == null) return;
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
       builder: (_) => _RequestCourierSheet(
         service: _service,
         auth: widget.auth,
         token: token,
-        onCreated: (delivery) {
-          Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => TrackingScreen(
-                auth: widget.auth,
-                courierId: delivery.id,
-              ),
-            ),
-          );
-        },
+        onCreated: _openTracking,
       ),
     );
   }
@@ -100,10 +95,17 @@ class _CourierTabState extends State<CourierTab> {
     if (!widget.auth.isAuthenticated) {
       return AppScrollTab(
         slivers: [
-          const SliverToBoxAdapter(child: PageHeader('Courier')),
+          const SliverToBoxAdapter(child: _CourierHeader()),
           SliverFillRemaining(
             hasScrollBody: false,
-            child: _SignedOutPrompt(onSignIn: widget.onSignIn),
+            child: EmptyState(
+              icon: Icons.local_shipping_outlined,
+              title: 'Courier on demand',
+              message:
+                  'Sign in to send packages door-to-door with MarketGO riders.',
+              actionLabel: 'Sign in',
+              onAction: widget.onSignIn,
+            ),
           ),
         ],
       );
@@ -111,37 +113,31 @@ class _CourierTabState extends State<CourierTab> {
 
     return AppScrollTab(
       slivers: [
-        SliverToBoxAdapter(
-          child: PageHeader(
-            'Courier',
-            trailing: ElevatedButton.icon(
-              onPressed: _requestCourier,
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size(0, 46),
-                padding: const EdgeInsets.symmetric(horizontal: 18),
-              ),
-              icon: const Icon(Icons.add_rounded, size: 20),
-              label: const Text('Request'),
-            ),
-          ),
-        ),
+        const SliverToBoxAdapter(child: _CourierHeader()),
+        SliverToBoxAdapter(child: _NewPickupCard(onTap: _requestCourier)),
+        const SliverToBoxAdapter(child: SectionHeader('Your trips')),
         if (_loading)
           const SliverToBoxAdapter(
-            child: Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: CircularProgressIndicator(),
-              ),
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 48),
+              child: Center(child: CircularProgressIndicator()),
             ),
           )
         else if (_error != null)
           SliverToBoxAdapter(
-            child: _ErrorBanner(message: _error!, onRetry: _load),
+            child: ErrorBanner(message: _error!, onRetry: _load),
           )
         else if (_couriers == null || _couriers!.isEmpty)
-          SliverFillRemaining(
-            hasScrollBody: false,
-            child: _EmptyState(onRequest: _requestCourier),
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.only(top: 20, bottom: 28),
+              child: EmptyState(
+                icon: Icons.inventory_2_outlined,
+                title: 'No courier trips yet',
+                message:
+                    'Book a pickup and we’ll match you with the nearest rider.',
+              ),
+            ),
           )
         else
           SliverPadding(
@@ -154,20 +150,112 @@ class _CourierTabState extends State<CourierTab> {
                   delivery: delivery,
                   onTap: isTerminalDelivery(delivery.status)
                       ? null
-                      : () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => TrackingScreen(
-                                auth: widget.auth,
-                                courierId: delivery.id,
-                              ),
-                            ),
-                          ),
+                      : () => _openTracking(delivery),
                 );
               },
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              separatorBuilder: (_, __) => const SizedBox(height: 0),
             ),
           ),
       ],
+    );
+  }
+}
+
+/// Page title with an explanatory line, matching the Orders tab rhythm.
+class _CourierHeader extends StatelessWidget {
+  const _CourierHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Courier', style: theme.textTheme.headlineMedium),
+          const SizedBox(height: 4),
+          Text(
+            'Send packages across the city with a nearby rider.',
+            style: theme.textTheme.bodyMedium,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Prominent call to action for booking a new pickup.
+class _NewPickupCard extends StatelessWidget {
+  const _NewPickupCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [CustomerApp.brandGreenDark, CustomerApp.brandGreen],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(Icons.local_shipping_rounded,
+                    color: Colors.white, size: 24),
+              ),
+              const SizedBox(width: 14),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Send a package',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                      ),
+                    ),
+                    SizedBox(height: 3),
+                    Text(
+                      'Book a rider to pick up and deliver in minutes.',
+                      style: TextStyle(color: Colors.white70, fontSize: 12.5),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Container(
+                width: 40,
+                height: 40,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.arrow_forward_rounded,
+                    size: 20, color: CustomerApp.brandGreenDark),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -301,14 +389,14 @@ class _RequestCourierSheetState extends State<_RequestCourierSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Request a package pickup',
-                  style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 4),
-              const Text(
-                'A nearby rider will pick it up and deliver it to the drop-off '
-                'address.',
-                style: TextStyle(fontSize: 13, color: Color(0xFF5B616A)),
-              ),
+               Text('Request a package pickup',
+                   style: Theme.of(context).textTheme.titleLarge),
+               const SizedBox(height: 4),
+               Text(
+                 'A nearby rider will pick it up and deliver it to the drop-off '
+                 'address.',
+                 style: Theme.of(context).textTheme.bodyMedium,
+               ),
               const SizedBox(height: 18),
               PlaceSearchField(
                 controller: _pickup,
@@ -348,8 +436,7 @@ class _RequestCourierSheetState extends State<_RequestCourierSheet> {
                           child: CircularProgressIndicator(
                               strokeWidth: 2, color: Colors.white),
                         )
-                      : Text(
-                          'Choose your rider — ${CustomerApp.currencySymbol}1,500 up'),
+                       : Text('Choose your rider — ${formatPrice(1500)} up'),
                 ),
               ),
             ],
@@ -380,7 +467,7 @@ class _RequestCourierSheetState extends State<_RequestCourierSheet> {
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-            color: const Color(0xFFDEF7E5),
+            color: CustomerApp.brandGreenLight,
             borderRadius: BorderRadius.circular(12),
           ),
           child: const Icon(Icons.scale_outlined,
@@ -391,12 +478,12 @@ class _RequestCourierSheetState extends State<_RequestCourierSheet> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Parcel weight',
-                  style: TextStyle(fontSize: 13, color: Color(0xFF5B616A))),
+               Text('Parcel weight',
+                   style: Theme.of(context).textTheme.bodyMedium),
               const SizedBox(height: 2),
-              Text('${_weightKg.toStringAsFixed(1)} kg',
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.w700)),
+               Text('${_weightKg.toStringAsFixed(1)} kg',
+                   style: const TextStyle(
+                       fontSize: 16, fontWeight: FontWeight.w800)),
             ],
           ),
         ),
@@ -428,106 +515,154 @@ class _CourierCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final active = !isTerminalDelivery(delivery.status);
-    final c = active
-        ? CustomerApp.brandGreenDark
-        : const Color(0xFF6B7280);
-    final statusLabel = _statusLabel(delivery.status);
+    final accent = _statusColor(delivery.status);
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: CustomerApp.surface,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: CustomerApp.surface,
+        borderRadius: BorderRadius.circular(CustomerApp.radiusCard),
+        border: Border.all(color: CustomerApp.hairline),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(CustomerApp.radiusCard),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: c.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    active
-                        ? Icons.delivery_dining_rounded
-                        : Icons.check_circle_outline_rounded,
-                    color: c,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: accent.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      child: Icon(
+                        active
+                            ? Icons.delivery_dining_rounded
+                            : Icons.check_circle_outline_rounded,
+                        color: accent,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          StatusChip(_statusLabel(delivery.status), color: accent),
+                          const SizedBox(height: 6),
+                          Text(
+                            '#${delivery.id} · ${_createdLabel(delivery.createdAt)}',
+                            style: theme.textTheme.bodyMedium
+                                ?.copyWith(fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text('Fee',
+                            style: theme.textTheme.bodyMedium
+                                ?.copyWith(fontSize: 11)),
+                        const SizedBox(height: 1),
+                        PriceText(delivery.fee.round(), size: 16),
+                      ],
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                const SizedBox(height: 16),
+                _RouteBlock(
+                  pickup: delivery.pickupAddress,
+                  dropoff: delivery.deliveryAddress,
+                ),
+                if (delivery.weightKg != null) ...[
+                  const SizedBox(height: 12),
+                  Row(
                     children: [
-                      StatusChip(statusLabel),
-                      const SizedBox(height: 4),
-                      Text('#${delivery.id}',
+                      const Icon(Icons.scale_outlined,
+                          size: 16, color: Color(0xFF9AA1AA)),
+                      const SizedBox(width: 8),
+                      Text(_weightText(delivery.weightKg!),
                           style: theme.textTheme.bodyMedium
                               ?.copyWith(fontSize: 12)),
                     ],
                   ),
+                ],
+                const SizedBox(height: 14),
+                const Divider(height: 1),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    const Icon(Icons.person_outline_rounded,
+                        size: 17, color: Color(0xFF9AA1AA)),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        delivery.riderName.isNotEmpty
+                            ? delivery.riderName
+                            : 'Waiting for a rider…',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    if (active)
+                      TextButton.icon(
+                        onPressed: onTap,
+                        icon: const Icon(Icons.near_me_rounded, size: 15),
+                        label: const Text('Track live'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: CustomerApp.brandGreenDark,
+                          visualDensity: VisualDensity.compact,
+                          textStyle: const TextStyle(
+                              fontWeight: FontWeight.w700, fontSize: 13),
+                        ),
+                      ),
+                  ],
                 ),
-                Text('${CustomerApp.currencySymbol}${delivery.fee.round()}',
-                    style: theme.textTheme.titleLarge?.copyWith(fontSize: 15)),
               ],
             ),
-            const SizedBox(height: 12),
-            _AddressLine(
-                Icons.trip_origin_rounded, delivery.pickupAddress, c),
-            const SizedBox(height: 6),
-            _AddressLine(Icons.place_rounded, delivery.deliveryAddress, c),
-            if (delivery.weightKg != null) ...[
-              const SizedBox(height: 6),
-              _AddressLine(
-                Icons.scale_outlined,
-                _weightText(delivery.weightKg!),
-                c,
-              ),
-            ],
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                const Icon(Icons.person_outline_rounded,
-                    size: 16, color: Color(0xFF9AA1AA)),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    delivery.riderName.isNotEmpty
-                        ? delivery.riderName
-                        : 'Waiting for a rider…',
-                    style: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
-                ),
-                if (active)
-                  Text('Track live ›',
-                      style: TextStyle(
-                          fontSize: 12,
-                          color: CustomerApp.brandGreenDark,
-                          fontWeight: FontWeight.w700)),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  String _statusLabel(String s) {
+  static Color _statusColor(String s) {
+    switch (s) {
+      case 'picked_up':
+      case 'in_transit':
+        return const Color(0xFF2563EB);
+      case 'accepted':
+        return CustomerApp.brandGreenDark;
+      case 'delivered':
+        return const Color(0xFF16A34A);
+      case 'cancelled':
+        return const Color(0xFFDC2626);
+      default:
+        return const Color(0xFFD97706);
+    }
+  }
+
+  static String _statusLabel(String s) {
     switch (s) {
       case 'accepted':
         return 'Rider assigned';
@@ -544,148 +679,78 @@ class _CourierCard extends StatelessWidget {
     }
   }
 
-  String _weightText(double kg) {
+  static String _weightText(double kg) {
     final label = kg == kg.roundToDouble()
         ? kg.toStringAsFixed(0)
         : kg.toStringAsFixed(1);
     return 'Parcel: $label kg';
   }
+
+  static String _createdLabel(DateTime date) {
+    final now = DateTime.now();
+    if (date.year == now.year &&
+        date.month == now.month &&
+        date.day == now.day) {
+      return 'Today';
+    }
+    return '${date.day} ${const [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ][date.month - 1]}';
+  }
 }
 
-class _AddressLine extends StatelessWidget {
-  const _AddressLine(this.icon, this.text, this.color);
+/// Pickup → drop-off route with a connected dot/pin marker.
+class _RouteBlock extends StatelessWidget {
+  const _RouteBlock({required this.pickup, required this.dropoff});
 
-  final IconData icon;
-  final String text;
-  final Color color;
+  final String pickup;
+  final String dropoff;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 16, color: color),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(text,
-              style: const TextStyle(fontSize: 13, color: Color(0xFF5B616A))),
+        _row(Icons.trip_origin_rounded, CustomerApp.brandGreen, 'Pickup', pickup),
+        Padding(
+          padding: const EdgeInsets.only(left: 8),
+          child: Container(width: 2, height: 16, color: const Color(0xFFD7DCE2)),
         ),
+        _row(Icons.location_on_rounded, const Color(0xFFDC2626), 'Drop-off',
+            dropoff),
       ],
     );
   }
-}
 
-class _SignedOutPrompt extends StatelessWidget {
-  const _SignedOutPrompt({required this.onSignIn});
-
-  final VoidCallback onSignIn;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 84,
-              height: 84,
-              decoration: BoxDecoration(
-                color: const Color(0xFFDEF7E5),
-                borderRadius: BorderRadius.circular(28),
+  Widget _row(IconData icon, Color color, String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: color),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF9AA1AA),
+                    fontWeight: FontWeight.w600),
               ),
-              child: const Icon(Icons.local_shipping_outlined,
-                  size: 36, color: Color(0xFF15803D)),
-            ),
-            const SizedBox(height: 16),
-            Text('Courier on demand', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 6),
-            const Text(
-              'Sign in to send packages door-to-door with MarketGO riders.',
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: onSignIn,
-              child: const Text('Sign in'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.onRequest});
-
-  final VoidCallback onRequest;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 84,
-              height: 84,
-              decoration: BoxDecoration(
-                color: const Color(0xFFDEF7E5),
-                borderRadius: BorderRadius.circular(28),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontWeight: FontWeight.w600, fontSize: 13.5),
               ),
-              child: const Icon(Icons.inventory_2_outlined,
-                  size: 36, color: Color(0xFF15803D)),
-            ),
-            const SizedBox(height: 16),
-            Text('No courier trips yet', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 6),
-            const Text(
-              'Book a pickup and we’ll match you with the nearest rider.',
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: onRequest,
-              child: const Text('Request a pickup'),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
-    );
-  }
-}
-
-class _ErrorBanner extends StatelessWidget {
-  const _ErrorBanner({required this.message, required this.onRetry});
-
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFEF2F2),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.cloud_off_rounded, color: Color(0xFFB3261E)),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(message,
-                  style: const TextStyle(fontSize: 13, color: Color(0xFFB3261E))),
-            ),
-            TextButton(onPressed: onRetry, child: const Text('Retry')),
-          ],
-        ),
-      ),
+      ],
     );
   }
 }

@@ -71,7 +71,13 @@ class CartTab extends StatelessWidget {
         if (cart.isEmpty)
           SliverFillRemaining(
             hasScrollBody: false,
-            child: _EmptyCart(onBrowse: onBrowse),
+            child: EmptyState(
+              icon: Icons.shopping_basket_outlined,
+              title: 'Your cart is empty',
+              message: 'Browse stores and add a few items to get started.',
+              actionLabel: 'Browse stores',
+              onAction: onBrowse,
+            ),
           )
         else ...[
           SliverPadding(
@@ -534,46 +540,3 @@ class _SummaryRow extends StatelessWidget {
   }
 }
 
-class _EmptyCart extends StatelessWidget {
-  const _EmptyCart({this.onBrowse});
-
-  final VoidCallback? onBrowse;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 84,
-              height: 84,
-              decoration: BoxDecoration(
-                color: CustomerApp.brandGreenLight,
-                borderRadius: BorderRadius.circular(28),
-              ),
-              child: Icon(Icons.shopping_basket_outlined,
-                  size: 40, color: CustomerApp.brandGreenDark),
-            ),
-            const SizedBox(height: 16),
-            Text('Your cart is empty', style: theme.textTheme.titleLarge),
-            const SizedBox(height: 6),
-            Text(
-              'Browse stores and add products to get started.',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: onBrowse,
-              child: const Text('Start shopping'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

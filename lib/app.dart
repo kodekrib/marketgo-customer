@@ -15,6 +15,13 @@ class CustomerApp extends StatelessWidget {
   static const Color ink = Color(0xFF111418); // near-black for text
   static const Color surface = Color(0xFFFFFFFF);
   static const Color surfaceMuted = Color(0xFFF7F8FA);
+
+  // Shared design tokens: one hairline border, consistent card radii.
+  static const Color border = Color(0xFFE2E5EA);
+  static const Color hairline = Color(0xFFEDEFF3);
+  static const double radiusCard = 22;
+  static const double radiusSheet = 28;
+  static const double radiusField = 16;
   static String appName = 'MarketGO';
   static String fontFamily = '';
   static bool maintenanceMode = false;
@@ -116,6 +123,73 @@ class CustomerApp extends StatelessWidget {
             letterSpacing: 0.2,
           ),
         ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: brandGreen,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          textStyle: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: brandGreenDark,
+          side: const BorderSide(color: Color(0xFFE2E5EA), width: 1.4),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          textStyle: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: brandGreenDark,
+          textStyle: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+      ),
+      // Every pushed screen shares one calm, borderless app bar.
+      appBarTheme: const AppBarTheme(
+        backgroundColor: surfaceMuted,
+        surfaceTintColor: Colors.transparent,
+        foregroundColor: ink,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: false,
+        titleTextStyle: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w800,
+          color: ink,
+        ),
+      ),
+      // One sheet language: white surface, 28px top radius, grab handle.
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: surface,
+        surfaceTintColor: Colors.transparent,
+        showDragHandle: true,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+      ),
+      dividerTheme: const DividerThemeData(
+        color: Color(0xFFF1F2F5),
+        thickness: 1,
+        space: 1,
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: ink,
+        contentTextStyle: const TextStyle(color: Colors.white),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+      ),
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: brandGreen,
+        foregroundColor: Colors.white,
+        elevation: 2,
       ),
     );
 

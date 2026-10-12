@@ -277,26 +277,11 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
               child: Center(child: CircularProgressIndicator()),
             )
           else if (_products.isEmpty)
-            SliverFillRemaining(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 48),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.inventory_2_rounded,
-                          size: 48, color: Colors.grey.shade300),
-                      const SizedBox(height: 12),
-                      Text(
-                        'No products yet',
-                        style: TextStyle(
-                          color: Colors.grey.shade500,
-                          fontSize: 15,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+            const SliverFillRemaining(
+              child: EmptyState(
+                icon: Icons.inventory_2_rounded,
+                title: 'No products yet',
+                message: 'This store hasn’t added any products yet.',
               ),
             )
           else

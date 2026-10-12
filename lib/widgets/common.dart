@@ -134,6 +134,121 @@ class PageHeader extends StatelessWidget {
   }
 }
 
+/// Full-height empty/signed-out state: a soft icon tile, headline, message and
+/// an optional call to action. Place inside a [Center] or [SliverFillRemaining].
+class EmptyState extends StatelessWidget {
+  const EmptyState({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+    this.actionIcon,
+    this.padding = const EdgeInsets.symmetric(horizontal: 32),
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+  final String? actionLabel;
+  final IconData? actionIcon;
+  final VoidCallback? onAction;
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: padding,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 84,
+              height: 84,
+              decoration: BoxDecoration(
+                color: CustomerApp.brandGreenLight,
+                borderRadius: BorderRadius.circular(28),
+              ),
+              child: Icon(icon, size: 36, color: CustomerApp.brandGreenDark),
+            ),
+            const SizedBox(height: 16),
+            Text(title,
+                textAlign: TextAlign.center, style: theme.textTheme.titleLarge),
+            const SizedBox(height: 6),
+            Text(message,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium),
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                onPressed: onAction,
+                icon: actionIcon == null ? null : Icon(actionIcon, size: 20),
+                label: Text(actionLabel!),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Inline error panel with an optional retry action — one visual language for
+/// every failure across the app.
+class ErrorBanner extends StatelessWidget {
+  const ErrorBanner({
+    super.key,
+    required this.message,
+    this.onRetry,
+    this.icon = Icons.cloud_off_rounded,
+    this.margin = const EdgeInsets.symmetric(horizontal: 20),
+  });
+
+  final String message;
+  final VoidCallback? onRetry;
+  final IconData icon;
+  final EdgeInsets margin;
+
+  static const Color _danger = Color(0xFFB3261E);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: margin,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFEF2F2),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFF6D3D0)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: _danger, size: 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                    fontSize: 13, height: 1.3, color: _danger),
+              ),
+            ),
+            if (onRetry != null)
+              TextButton(
+                onPressed: onRetry,
+                style: TextButton.styleFrom(foregroundColor: _danger),
+                child: const Text('Retry'),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Standard scroll container for tab bodies (safe-area + bottom padding).
 class AppScrollTab extends StatelessWidget {
   const AppScrollTab({super.key, required this.slivers});
