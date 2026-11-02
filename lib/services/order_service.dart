@@ -28,6 +28,31 @@ class OrderService {
         'Authorization': 'Bearer $token',
       };
 
+  Future<List<ApiStoreOrderQuote>> quoteOrders(
+    String token,
+    List<CheckoutItem> items, {
+    required double deliveryLat,
+    required double deliveryLng,
+  }) async {
+    final data = await api.post(
+      '/api/v1/customer/orders/quote',
+      headers: _auth(token),
+      body: {
+        'delivery_latitude': deliveryLat,
+        'delivery_longitude': deliveryLng,
+        'items': items.map((item) => item.toJson()).toList(),
+      },
+    );
+    final quotes = data['quotes'];
+    if (quotes is! List) {
+      throw const ApiException('Unexpected checkout quote payload');
+    }
+    return quotes
+        .whereType<Map<String, dynamic>>()
+        .map(ApiStoreOrderQuote.fromJson)
+        .toList();
+  }
+
   /// Places a real order. Returns the created order (with its pending
   /// delivery) so checkout can jump straight into tracking.
   ///
@@ -38,6 +63,7 @@ class OrderService {
   Future<ApiOrder> placeOrder(
     String token,
     List<CheckoutItem> items, {
+    required String idempotencyKey,
     required String address,
     required String phone,
     double? deliveryLat,
@@ -50,6 +76,7 @@ class OrderService {
     final created = await placeOrders(
       token,
       items,
+      idempotencyKey: idempotencyKey,
       address: address,
       phone: phone,
       deliveryLat: deliveryLat,
@@ -68,6 +95,7 @@ class OrderService {
   Future<List<ApiOrder>> placeOrders(
     String token,
     List<CheckoutItem> items, {
+    required String idempotencyKey,
     required String address,
     required String phone,
     double? deliveryLat,
@@ -81,6 +109,7 @@ class OrderService {
       '/api/v1/customer/orders',
       headers: _auth(token),
       body: {
+        'idempotency_key': idempotencyKey,
         'delivery_address': address,
         'phone': phone,
         if (deliveryLat != null && deliveryLat != 0)

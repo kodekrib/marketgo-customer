@@ -1,5 +1,8 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import '../app.dart';
+import '../models/api.dart';
 import '../models/cart.dart';
 import '../models/request.dart';
 import '../services/account_store.dart';
@@ -33,37 +36,9 @@ class CartTab extends StatelessWidget {
   final VoidCallback? onSignIn;
   final void Function({int? orderId, int? courierId})? onPlaced;
 
-  static const int _freeDeliveryThreshold = 100000;
-  static const int _deliveryFee = 500;
-
-  /// Progressive service fee tiers (mirrors backend config).
-  static const _serviceFeeTiers = [
-    (min: 0.0, max: 10000.0, rate: 3.0),
-    (min: 10001.0, max: 50000.0, rate: 2.5),
-    (min: 50001.0, max: 100000.0, rate: 2.0),
-    (min: 100001.0, max: 0.0, rate: 1.5), // max=0 means no cap on tier
-  ];
-  static const double _serviceFeeCap = 2000;
-
-  static int _calculateServiceFee(int subtotal) {
-    if (subtotal <= 0) return 0;
-    double fee = 0;
-    for (final tier in _serviceFeeTiers) {
-      if (subtotal <= tier.min) break;
-      final tierMax = tier.max <= 0 ? subtotal.toDouble() : tier.max;
-      final tierAmount = (subtotal < tierMax ? subtotal : tierMax) - tier.min;
-      if (tierAmount <= 0) continue;
-      fee += tierAmount * tier.rate / 100;
-    }
-    if (fee > _serviceFeeCap) fee = _serviceFeeCap;
-    return fee.round();
-  }
-
   @override
   Widget build(BuildContext context) {
     final subtotal = cart.subtotal;
-    final delivery = subtotal >= _freeDeliveryThreshold ? 0 : _deliveryFee;
-    final serviceFee = _calculateServiceFee(subtotal);
 
     return AppScrollTab(
       slivers: [
@@ -96,12 +71,7 @@ class CartTab extends StatelessWidget {
             ),
           ),
           SliverToBoxAdapter(
-            child: _OrderSummary(
-              subtotal: subtotal,
-              delivery: delivery,
-              serviceFee: serviceFee,
-              total: subtotal + delivery + serviceFee,
-            ),
+            child: _CartSubtotal(subtotal: subtotal),
           ),
           SliverToBoxAdapter(
             child: Padding(
@@ -131,10 +101,6 @@ class CartTab extends StatelessWidget {
       );
       return;
     }
-    final subtotal = cart.subtotal;
-    final delivery = subtotal >= _freeDeliveryThreshold ? 0 : _deliveryFee;
-    final serviceFee = _calculateServiceFee(subtotal);
-    final total = subtotal + delivery + serviceFee;
     final items = <CheckoutItem>[
       for (final item in cart.items)
         if (int.tryParse(item.product.id) case final id?)
@@ -162,7 +128,6 @@ class CartTab extends StatelessWidget {
         token: token,
         email: auth.user?.email ?? '',
         items: items,
-        total: total,
         onPlaced: (orderId) {
           cart.clear();
           Navigator.of(ctx).pop();
@@ -191,6 +156,17 @@ const List<_DeliveryArea> _deliveryAreas = [
   _DeliveryArea('Victoria Island', 6.4281, 3.4219),
 ];
 
+String _newCheckoutIdempotencyKey() {
+  final random = Random.secure();
+  final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  final hex =
+      bytes.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
+  return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
+      '${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
+}
+
 class _CheckoutSheet extends StatefulWidget {
   const _CheckoutSheet({
     required this.service,
@@ -198,7 +174,6 @@ class _CheckoutSheet extends StatefulWidget {
     required this.token,
     required this.email,
     required this.items,
-    required this.total,
     required this.onPlaced,
   });
 
@@ -207,7 +182,6 @@ class _CheckoutSheet extends StatefulWidget {
   final String token;
   final String email;
   final List<CheckoutItem> items;
-  final int total;
   final ValueChanged<int> onPlaced;
 
   @override
@@ -220,6 +194,11 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
   final _phone = TextEditingController(text: '08012345678');
   _DeliveryArea? _area = _deliveryAreas.first;
   PlaceSuggestion? _picked;
+  List<ApiStoreOrderQuote>? _quotes;
+  String? _quoteError;
+  bool _quoteLoading = false;
+  int _quoteRequest = 0;
+  final String _idempotencyKey = _newCheckoutIdempotencyKey();
   bool _submitting = false;
 
   @override
@@ -230,6 +209,7 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
     _address = TextEditingController(
       text: saved?.address ?? '12 Admiralty Way, Lekki, Lagos',
     );
+    _refreshQuote();
   }
 
   @override
@@ -239,10 +219,57 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
     super.dispose();
   }
 
+  Future<void> _refreshQuote() async {
+    final request = ++_quoteRequest;
+    final latitude = _picked?.latitude ?? _area?.lat;
+    final longitude = _picked?.longitude ?? _area?.lng;
+    if (latitude == null || longitude == null) {
+      setState(() {
+        _quotes = null;
+        _quoteError = 'Choose a delivery area to calculate your order total.';
+      });
+      return;
+    }
+    setState(() {
+      _quoteLoading = true;
+      _quoteError = null;
+    });
+    try {
+      final quotes = await widget.service.quoteOrders(
+        widget.token,
+        widget.items,
+        deliveryLat: latitude,
+        deliveryLng: longitude,
+      );
+      if (!mounted || request != _quoteRequest) return;
+      setState(() {
+        _quotes = quotes;
+        _quoteError =
+            quotes.isEmpty ? 'No quote was returned for this cart.' : null;
+      });
+    } catch (error) {
+      if (!mounted || request != _quoteRequest) return;
+      setState(() {
+        _quotes = null;
+        _quoteError = 'Could not calculate current pricing: $error';
+      });
+    } finally {
+      if (mounted && request == _quoteRequest) {
+        setState(() => _quoteLoading = false);
+      }
+    }
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _submitting = true);
     try {
+      await _refreshQuote();
+      if (!mounted) return;
+      if (_quotes == null || _quotes!.isEmpty) {
+        throw StateError(_quoteError ?? 'Checkout pricing is unavailable');
+      }
+
       final deliveryLat = _picked?.latitude ?? _area?.lat;
       final deliveryLng = _picked?.longitude ?? _area?.lng;
       final storeIds = widget.items
@@ -280,10 +307,16 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
         }
       }
       if (!mounted) return;
+      if (chosen != null && _quotes!.length == 1) {
+        setState(() {
+          _quotes = [_quotes!.single.withDeliveryFee(chosen!.price)];
+        });
+      }
 
       final orders = await widget.service.placeOrders(
         widget.token,
         widget.items,
+        idempotencyKey: _idempotencyKey,
         address: _address.text.trim(),
         phone: _phone.text.trim(),
         deliveryLat: deliveryLat,
@@ -296,6 +329,17 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
       if (!mounted) return;
       if (orders.isEmpty) {
         throw StateError('Checkout did not create any store orders');
+      }
+      if (!_matchesQuote(orders, _quotes!)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Pricing changed while placing your order. Review the unpaid order before paying.',
+            ),
+          ),
+        );
+        widget.onPlaced(orders.first.id);
+        return;
       }
 
       final paymentService = PaymentService();
@@ -390,6 +434,21 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
     }
   }
 
+  bool _matchesQuote(List<ApiOrder> orders, List<ApiStoreOrderQuote> quotes) {
+    if (orders.length != quotes.length) return false;
+    for (var i = 0; i < orders.length; i++) {
+      final order = orders[i];
+      final quote = quotes[i];
+      if ((order.subtotal - quote.subtotal).abs() >= 0.01 ||
+          (order.deliveryFee - quote.deliveryFee).abs() >= 0.01 ||
+          (order.serviceFee - quote.serviceFee).abs() >= 0.01 ||
+          (order.totalAmount - quote.totalAmount).abs() >= 0.01) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
@@ -416,8 +475,8 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
                     ? 'Your cart spans $storeCount stores. We will create one '
                         'order per store and collect payment separately for each. '
                         'Rider selection is unavailable for multi-store checkout.'
-                    : '${formatPrice(widget.total)} — confirm your delivery '
-                        'details and place the order.',
+                    : 'Confirm your delivery details and review the current '
+                        'server-calculated total before placing your order.',
                 style: const TextStyle(fontSize: 13, color: Color(0xFF5B616A)),
               ),
               const SizedBox(height: 18),
@@ -428,10 +487,13 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
                 prefixIcon: const Icon(Icons.place_rounded, size: 20),
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Required' : null,
-                onLocationChanged: (p) => setState(() {
-                  _picked = p;
-                  if (p != null) _area = null;
-                }),
+                onLocationChanged: (p) {
+                  setState(() {
+                    _picked = p;
+                    if (p != null) _area = null;
+                  });
+                  _refreshQuote();
+                },
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -457,12 +519,22 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
                           child: Text(a.label),
                         ))
                     .toList(),
-                onChanged: (a) => setState(() {
-                  _area = a;
-                  _picked = null;
-                }),
+                onChanged: (a) {
+                  setState(() {
+                    _area = a;
+                    _picked = null;
+                  });
+                  _refreshQuote();
+                },
               ),
               const SizedBox(height: 20),
+              _CheckoutQuoteSummary(
+                quotes: _quotes,
+                loading: _quoteLoading,
+                error: _quoteError,
+                onRetry: _refreshQuote,
+              ),
+              const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -485,18 +557,10 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
   }
 }
 
-class _OrderSummary extends StatelessWidget {
-  const _OrderSummary({
-    required this.subtotal,
-    required this.delivery,
-    required this.serviceFee,
-    required this.total,
-  });
+class _CartSubtotal extends StatelessWidget {
+  const _CartSubtotal({required this.subtotal});
 
   final int subtotal;
-  final int delivery;
-  final int serviceFee;
-  final int total;
 
   @override
   Widget build(BuildContext context) {
@@ -509,22 +573,125 @@ class _OrderSummary extends StatelessWidget {
       ),
       child: Column(
         children: [
-          _SummaryRow(label: 'Subtotal', value: subtotal),
-          const SizedBox(height: 10),
-          _SummaryRow(
-            label: 'Delivery',
-            value: delivery,
-            valueLabel: delivery == 0 ? 'Free' : null,
+          _SummaryRow(label: 'Catalog subtotal', value: subtotal),
+          const SizedBox(height: 8),
+          const Text(
+            'Delivery and service fees are calculated from current server pricing at checkout.',
+            style: TextStyle(fontSize: 12, color: Color(0xFF5B616A)),
           ),
-          if (serviceFee > 0) ...[
-            const SizedBox(height: 10),
-            _SummaryRow(label: 'Service fee', value: serviceFee),
+        ],
+      ),
+    );
+  }
+}
+
+class _CheckoutQuoteSummary extends StatelessWidget {
+  const _CheckoutQuoteSummary({
+    required this.quotes,
+    required this.loading,
+    required this.error,
+    required this.onRetry,
+  });
+
+  final List<ApiStoreOrderQuote>? quotes;
+  final bool loading;
+  final String? error;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final currentQuotes = quotes;
+    final total = currentQuotes?.fold<double>(
+      0,
+      (sum, quote) => sum + quote.totalAmount,
+    );
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: CustomerApp.surface,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Current checkout quote',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Prices come from the live catalog and server fee settings. Final prices are checked again before payment.',
+            style: TextStyle(fontSize: 12, color: Color(0xFF5B616A)),
+          ),
+          if (loading) ...[
+            const SizedBox(height: 12),
+            const LinearProgressIndicator(),
+          ] else if (error != null) ...[
+            const SizedBox(height: 12),
+            Text(error!, style: const TextStyle(color: Colors.red)),
+            TextButton(
+              onPressed: onRetry,
+              child: const Text('Retry quote'),
+            ),
+          ] else if (currentQuotes != null) ...[
+            const SizedBox(height: 12),
+            for (final quote in currentQuotes) ...[
+              Text(
+                quote.storeName,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 6),
+              _QuoteLine(label: 'Items', amount: quote.subtotal),
+              _QuoteLine(label: 'Delivery', amount: quote.deliveryFee),
+              if (quote.serviceFee > 0)
+                _QuoteLine(label: 'Service fee', amount: quote.serviceFee),
+              const Divider(height: 16),
+              _QuoteLine(
+                label: 'Store order total',
+                amount: quote.totalAmount,
+                emphasized: true,
+              ),
+              if (currentQuotes.length > 1) const SizedBox(height: 12),
+            ],
+            const Divider(height: 20),
+            _QuoteLine(
+              label: 'Total across separate payments',
+              amount: total ?? 0,
+              emphasized: true,
+            ),
           ],
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
-            child: Divider(height: 1),
-          ),
-          _SummaryRow(label: 'Total', value: total, emphasize: true),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuoteLine extends StatelessWidget {
+  const _QuoteLine({
+    required this.label,
+    required this.amount,
+    this.emphasized = false,
+  });
+
+  final String label;
+  final double amount;
+  final bool emphasized;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = TextStyle(
+      fontSize: emphasized ? 14 : 12,
+      fontWeight: emphasized ? FontWeight.w800 : FontWeight.w500,
+      color: emphasized ? CustomerApp.ink : const Color(0xFF5B616A),
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Text(label, style: style),
+          const Spacer(),
+          Text(formatMoney(amount), style: style),
         ],
       ),
     );
@@ -532,40 +699,18 @@ class _OrderSummary extends StatelessWidget {
 }
 
 class _SummaryRow extends StatelessWidget {
-  const _SummaryRow({
-    required this.label,
-    required this.value,
-    this.emphasize = false,
-    this.valueLabel,
-  });
+  const _SummaryRow({required this.label, required this.value});
 
   final String label;
   final int value;
-  final bool emphasize;
-  final String? valueLabel;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: emphasize ? 16 : 14,
-            fontWeight: emphasize ? FontWeight.w800 : FontWeight.w500,
-            color: emphasize ? CustomerApp.ink : const Color(0xFF5B616A),
-          ),
-        ),
+        Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
         const Spacer(),
-        if (valueLabel != null)
-          Text(valueLabel!,
-              style: TextStyle(
-                  color: CustomerApp.brandGreenDark,
-                  fontWeight: FontWeight.w800)),
-        if (valueLabel == null)
-          PriceText(value,
-              size: emphasize ? 17 : 14,
-              weight: emphasize ? FontWeight.w800 : FontWeight.w700),
+        PriceText(value, size: 14, weight: FontWeight.w700),
       ],
     );
   }

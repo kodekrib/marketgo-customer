@@ -71,7 +71,8 @@ class ApiStore {
         openingHours: json['opening_hours'] as String? ?? '08:00',
         closingHours: json['closing_hours'] as String? ?? '22:00',
         deliveryFee: _double(json['delivery_fee']),
-        estimatedTime: json['estimated_delivery_time'] as String? ?? '22-32 min',
+        estimatedTime:
+            json['estimated_delivery_time'] as String? ?? '22-32 min',
         ratingCount: _int(json['rating_count']),
         isVerified: json['is_verified'] == true || json['is_verified'] == 1,
         rating: _double(json['rating']),
@@ -154,6 +155,50 @@ class ApiOrderItem {
       );
 }
 
+class ApiStoreOrderQuote {
+  const ApiStoreOrderQuote({
+    required this.storeId,
+    required this.storeName,
+    required this.subtotal,
+    required this.deliveryFee,
+    required this.serviceFee,
+    required this.totalAmount,
+    required this.currency,
+  });
+
+  final int storeId;
+  final String storeName;
+  final double subtotal;
+  final double deliveryFee;
+  final double serviceFee;
+  final double totalAmount;
+  final String currency;
+
+  ApiStoreOrderQuote withDeliveryFee(double fee) {
+    final roundedFee = (fee * 100).round() / 100;
+    return ApiStoreOrderQuote(
+      storeId: storeId,
+      storeName: storeName,
+      subtotal: subtotal,
+      deliveryFee: roundedFee,
+      serviceFee: serviceFee,
+      totalAmount: subtotal + roundedFee + serviceFee,
+      currency: currency,
+    );
+  }
+
+  factory ApiStoreOrderQuote.fromJson(Map<String, dynamic> json) =>
+      ApiStoreOrderQuote(
+        storeId: _int(json['store_id']),
+        storeName: json['store_name'] as String? ?? '',
+        subtotal: _double(json['subtotal']),
+        deliveryFee: _double(json['delivery_fee']),
+        serviceFee: _double(json['service_fee']),
+        totalAmount: _double(json['total_amount']),
+        currency: json['currency'] as String? ?? 'NGN',
+      );
+}
+
 /// Delivery record shared by order checkout and on-demand courier requests.
 class ApiDelivery {
   const ApiDelivery({
@@ -223,9 +268,7 @@ class ApiDelivery {
         fee: _double(json['fee']),
         phone: json['phone'] as String? ?? '',
         packageDetails: json['package_details'] as String? ?? '',
-        weightKg: json['weight_kg'] == null
-            ? null
-            : _double(json['weight_kg']),
+        weightKg: json['weight_kg'] == null ? null : _double(json['weight_kg']),
         pickupLat: json['pickup_latitude'] == null
             ? null
             : _double(json['pickup_latitude']),
@@ -293,8 +336,10 @@ class ApiOrder {
 
   /// A rider has been assigned to this order's delivery.
   bool get hasRiderAssigned =>
-      delivery?.riderName.isNotEmpty == true || delivery?.status == 'accepted' ||
-      delivery?.status == 'picked_up' || delivery?.status == 'in_transit';
+      delivery?.riderName.isNotEmpty == true ||
+      delivery?.status == 'accepted' ||
+      delivery?.status == 'picked_up' ||
+      delivery?.status == 'in_transit';
 
   /// True only while the order can be tracked live: a rider is assigned and is
   /// broadcasting a GPS location, and the order is still in flight.
@@ -306,8 +351,7 @@ class ApiOrder {
   /// Non-terminal order that is not being tracked live yet (awaiting a rider
   /// or rider location) — shows the slim "Awaiting rider" placeholder instead
   /// of the full Chat/Track-live status card.
-  bool get isAwaitingRider =>
-      !isTerminalDelivery(status) && !isLiveTracking;
+  bool get isAwaitingRider => !isTerminalDelivery(status) && !isLiveTracking;
 
   factory ApiOrder.fromJson(Map<String, dynamic> json) => ApiOrder(
         id: _int(json['id']),
@@ -370,4 +414,5 @@ bool isTerminalDelivery(String status) => _isTerminal(status);
 Map<String, dynamic>? _map(Object? v) => v is Map<String, dynamic> ? v : null;
 List<dynamic> _list(Object? v) => v is List ? v : const <dynamic>[];
 int _int(Object? v) => v is num ? v.toInt() : int.tryParse('$v') ?? 0;
-double _double(Object? v) => v is num ? v.toDouble() : double.tryParse('$v') ?? 0;
+double _double(Object? v) =>
+    v is num ? v.toDouble() : double.tryParse('$v') ?? 0;
