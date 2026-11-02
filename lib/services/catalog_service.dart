@@ -142,9 +142,8 @@ List<Vendor> _adaptStores(List<dynamic> raw) => raw
         ))
     .toList();
 
-List<Product> _adaptProducts(List<dynamic> raw) => raw
-    .map((e) => ApiProduct.fromJson(e as Map<String, dynamic>))
-    .map((p) {
+List<Product> _adaptProducts(List<dynamic> raw) =>
+    raw.map((e) => ApiProduct.fromJson(e as Map<String, dynamic>)).map((p) {
       final categoryName = p.category?.name ?? p.store?.name ?? p.name;
       final color = colorFor(categoryName);
       return Product(
@@ -159,9 +158,9 @@ List<Product> _adaptProducts(List<dynamic> raw) => raw
             : categoryIcon(p.category?.icon),
         imageUrl: p.imageUrl,
         category: p.category?.name,
+        storeId: p.storeId,
       );
-    })
-    .toList();
+    }).toList();
 
 // ---------------------------------------------------------------------------
 // Bundled demo catalogue (used only when the API is unreachable).

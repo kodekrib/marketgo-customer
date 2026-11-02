@@ -63,6 +63,7 @@ class Product {
     this.imageUrl = '',
     this.tag,
     this.category,
+    this.storeId = 0,
   });
 
   final String id;
@@ -75,6 +76,7 @@ class Product {
   final String imageUrl; // optional product photo from the vendor panel
   final String? tag; // optional promo label, e.g. "-20%"
   final String? category; // category name when sourced from the API
+  final int storeId;
 }
 
 class Category {
@@ -301,13 +303,9 @@ const List<Category> categories = [
       icon: Icons.health_and_safety_rounded,
       color: Color(0xFFEC4899)),
   Category(
-      name: 'Fashion',
-      icon: Icons.checkroom_rounded,
-      color: Color(0xFF7C3AED)),
+      name: 'Fashion', icon: Icons.checkroom_rounded, color: Color(0xFF7C3AED)),
   Category(
-      name: 'More',
-      icon: Icons.more_horiz_rounded,
-      color: Color(0xFF6B7280)),
+      name: 'More', icon: Icons.more_horiz_rounded, color: Color(0xFF6B7280)),
 ];
 
 const List<Product> products = [

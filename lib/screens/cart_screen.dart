@@ -126,8 +126,7 @@ class CartTab extends StatelessWidget {
     if (token == null || token == 'demo.access') {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-              'Sign in to the live backend to place real orders.'),
+          content: Text('Sign in to the live backend to place real orders.'),
         ),
       );
       return;
@@ -139,7 +138,7 @@ class CartTab extends StatelessWidget {
     final items = <CheckoutItem>[
       for (final item in cart.items)
         if (int.tryParse(item.product.id) case final id?)
-          CheckoutItem(id, item.quantity),
+          CheckoutItem(id, item.quantity, storeId: item.product.storeId),
     ];
     if (items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -246,39 +245,43 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
     try {
       final deliveryLat = _picked?.latitude ?? _area?.lat;
       final deliveryLng = _picked?.longitude ?? _area?.lng;
+      final storeIds = widget.items
+          .map((item) => item.storeId)
+          .where((storeId) => storeId > 0)
+          .toSet();
+      final isMultiStore = storeIds.length > 1;
 
-      // "Choose your rider": open a bid request and let the customer pick one
-      // of the online riders who offer a price. If the request can't be opened
-      // or the customer backs out, the order still goes out broadcast-style.
       RiderOffer? chosen;
-      try {
-        final request = await RequestService().createRequest(
-          widget.token,
-          CreateDeliveryRequest(
-            type: 'order',
-            items: widget.items.map((e) => e.toJson()).toList(),
-            deliveryAddress: _address.text.trim(),
-            deliveryLat: deliveryLat,
-            deliveryLng: deliveryLng,
-            phone: _phone.text.trim(),
-          ),
-        );
-        if (!mounted) return;
-        chosen = await Navigator.of(context).push<RiderOffer>(
-          MaterialPageRoute(
-            builder: (_) => RiderPickerScreen(
-              auth: widget.auth,
-              token: widget.token,
-              request: request,
+      if (!isMultiStore) {
+        try {
+          final request = await RequestService().createRequest(
+            widget.token,
+            CreateDeliveryRequest(
+              type: 'order',
+              items: widget.items.map((e) => e.toJson()).toList(),
+              deliveryAddress: _address.text.trim(),
+              deliveryLat: deliveryLat,
+              deliveryLng: deliveryLng,
+              phone: _phone.text.trim(),
             ),
-          ),
-        );
-      } catch (_) {
-        chosen = null;
+          );
+          if (!mounted) return;
+          chosen = await Navigator.of(context).push<RiderOffer>(
+            MaterialPageRoute(
+              builder: (_) => RiderPickerScreen(
+                auth: widget.auth,
+                token: widget.token,
+                request: request,
+              ),
+            ),
+          );
+        } catch (_) {
+          chosen = null;
+        }
       }
       if (!mounted) return;
 
-      final order = await widget.service.placeOrder(
+      final orders = await widget.service.placeOrders(
         widget.token,
         widget.items,
         address: _address.text.trim(),
@@ -291,73 +294,92 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
         deliveryFee: chosen?.price,
       );
       if (!mounted) return;
+      if (orders.isEmpty) {
+        throw StateError('Checkout did not create any store orders');
+      }
 
-      // Initiate payment and open WebView.
-      try {
-        final paymentService = PaymentService();
-        final paymentData = await paymentService.initPayment(
-          widget.token,
-          orderId: order.id,
-          amount: order.totalAmount,
-          email: widget.email,
-        );
-        if (!mounted) return;
+      final paymentService = PaymentService();
+      final unpaidOrderIds = <int>[];
+      for (final order in orders) {
+        try {
+          final paymentData = await paymentService.initPayment(
+            widget.token,
+            orderId: order.id,
+            amount: order.totalAmount,
+            email: widget.email,
+          );
+          if (!mounted) return;
 
-        final gateway = (paymentData['gateway'] ?? 'paystack').toString();
-        final reference = (paymentData['reference'] ?? '').toString();
-        final paymentUrl = gateway == 'paystack'
-            ? (paymentData['authorization_url'] ?? '').toString()
-            : (paymentData['payment_link'] ?? '').toString();
+          final gateway = (paymentData['gateway'] ?? 'paystack').toString();
+          final reference = (paymentData['reference'] ?? '').toString();
+          final paymentUrl = gateway == 'paystack'
+              ? (paymentData['authorization_url'] ?? '').toString()
+              : (paymentData['payment_link'] ?? '').toString();
+          if (paymentUrl.isEmpty || reference.isEmpty) {
+            unpaidOrderIds.add(order.id);
+            continue;
+          }
 
-        if (paymentUrl.isEmpty) {
-          // No payment URL — order placed without online payment.
-          widget.onPlaced(order.id);
-          return;
-        }
-
-        // Open payment in WebView.
-        final paid = await Navigator.of(context).push<bool>(
-          MaterialPageRoute(
-            builder: (_) => PaymentWebViewScreen(
-              paymentUrl: paymentUrl,
+          final paid = await Navigator.of(context).push<bool>(
+            MaterialPageRoute(
+              builder: (_) => PaymentWebViewScreen(
+                paymentUrl: paymentUrl,
+                reference: reference,
+                gateway: gateway,
+              ),
+            ),
+          );
+          if (!mounted) return;
+          if (paid != true) {
+            final verification = await paymentService.verifyPayment(
+              widget.token,
               reference: reference,
-              gateway: gateway,
+            );
+            final transaction = verification['transaction'];
+            final status = transaction is Map ? transaction['status'] : null;
+            if (status != 'success' && status != 'successful') {
+              unpaidOrderIds.add(order.id);
+            }
+            continue;
+          }
+
+          final verification = await paymentService.verifyPayment(
+            widget.token,
+            reference: reference,
+          );
+          final transaction = verification['transaction'];
+          final status = transaction is Map ? transaction['status'] : null;
+          if (status != 'success' && status != 'successful') {
+            unpaidOrderIds.add(order.id);
+          }
+        } catch (_) {
+          unpaidOrderIds.add(order.id);
+        }
+      }
+      if (!mounted) return;
+
+      if (unpaidOrderIds.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              orders.length == 1
+                  ? 'Payment confirmed for order #${orders.first.id}.'
+                  : 'Payment confirmed for all ${orders.length} store orders.',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Payment is not confirmed for ${unpaidOrderIds.length} order(s). '
+              'Review your Orders before starting another checkout.',
             ),
           ),
         );
-
-        if (!mounted) return;
-
-        if (paid == true) {
-          // Payment completed in WebView — verify with backend.
-          try {
-            await paymentService.verifyPayment(widget.token, reference: reference);
-          } catch (_) {
-            // Verification is best-effort; webhook will also confirm.
-          }
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Payment successful! Order #$order.id confirmed.'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Payment was not completed. Order #$order.id is pending.')),
-          );
-        }
-
-        widget.onPlaced(order.id);
-      } catch (e) {
-        // Payment init failed, but order was placed.
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Order #$order.id placed. Payment pending: $e')),
-          );
-          widget.onPlaced(order.id);
-        }
       }
+      widget.onPlaced(orders.first.id);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -371,6 +393,11 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final storeCount = widget.items
+        .map((item) => item.storeId)
+        .where((storeId) => storeId > 0)
+        .toSet()
+        .length;
     return Padding(
       padding: EdgeInsets.only(bottom: bottomInset),
       child: SingleChildScrollView(
@@ -385,8 +412,12 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
                   style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 4),
               Text(
-                '${formatPrice(widget.total)} — confirm your delivery details '
-                'and place the order.',
+                storeCount > 1
+                    ? 'Your cart spans $storeCount stores. We will create one '
+                        'order per store and collect payment separately for each. '
+                        'Rider selection is unavailable for multi-store checkout.'
+                    : '${formatPrice(widget.total)} — confirm your delivery '
+                        'details and place the order.',
                 style: const TextStyle(fontSize: 13, color: Color(0xFF5B616A)),
               ),
               const SizedBox(height: 18),
@@ -539,4 +570,3 @@ class _SummaryRow extends StatelessWidget {
     );
   }
 }
-

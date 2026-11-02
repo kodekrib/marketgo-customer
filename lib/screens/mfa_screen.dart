@@ -44,8 +44,10 @@ class _MfaScreenState extends State<MfaScreen> {
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
     final code = _codeController.text.replaceAll(RegExp(r'[^0-9]'), '');
-    if (code.isEmpty) {
-      widget.auth.error = 'Enter the verification code.';
+    final length = widget.auth.pendingMfa?.codeLength ?? 6;
+    if (widget.auth.loading) return;
+    if (code.length != length) {
+      widget.auth.error = 'Enter the full $length-digit code.';
       return;
     }
     final ok = await widget.auth.verifyMfaCode(code);
@@ -107,7 +109,6 @@ class _MfaScreenState extends State<MfaScreen> {
                     style: theme.textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 24),
-
                   if (devCode != null && devCode.isNotEmpty) ...[
                     Container(
                       padding: const EdgeInsets.all(16),
@@ -136,7 +137,6 @@ class _MfaScreenState extends State<MfaScreen> {
                     ),
                     const SizedBox(height: 20),
                   ],
-
                   TextField(
                     controller: _codeController,
                     keyboardType: TextInputType.number,
@@ -196,8 +196,7 @@ class _ErrorBanner extends StatelessWidget {
         ),
         child: Row(
           children: [
-            const Icon(Icons.error_outline,
-                color: Color(0xFFB3261E), size: 20),
+            const Icon(Icons.error_outline, color: Color(0xFFB3261E), size: 20),
             const SizedBox(width: 8),
             Expanded(
               child: Text(

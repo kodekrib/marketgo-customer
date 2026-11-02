@@ -13,7 +13,7 @@ void main() {
     await tester.pumpWidget(const CustomerApp());
 
     expect(find.text('Good morning!'), findsOneWidget);
-    expect(find.text('Popular Stores'), findsOneWidget);
+    expect(find.text('Shop by category'), findsOneWidget);
     expect(find.text('Home'), findsOneWidget);
     expect(find.text('Cart'), findsOneWidget);
     expect(find.text('Sign in'), findsNothing);

@@ -19,19 +19,23 @@ class OrderDetailScreen extends StatelessWidget {
     this.apiOrder,
     this.auth,
     this.onTrack,
+    this.onPay,
   });
 
   final Order order;
   final ApiOrder? apiOrder;
   final AuthModel? auth;
   final void Function(int orderId)? onTrack;
+  final VoidCallback? onPay;
 
   /// True while live tracking is available. Demo orders (no [apiOrder] from
   /// the backend) keep the full tracker as the standalone showcase.
   bool get _live => apiOrder?.isLiveTracking ?? true;
 
   bool get _awaiting =>
-      apiOrder != null && !apiOrder!.isLiveTracking && !isTerminalDelivery(apiOrder!.status);
+      apiOrder != null &&
+      !apiOrder!.isLiveTracking &&
+      !isTerminalDelivery(apiOrder!.status);
 
   @override
   Widget build(BuildContext context) {
@@ -107,6 +111,17 @@ class OrderDetailScreen extends StatelessWidget {
               ],
             ),
           ),
+          if (apiOrder?.status == 'pending' && onPay != null) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: onPay,
+                icon: const Icon(Icons.lock_outline_rounded),
+                label: const Text('Complete payment'),
+              ),
+            ),
+          ],
           // Live tracking / awaiting rider — only during active delivery.
           if (_live)
             OrderTrackerCard(
@@ -147,7 +162,8 @@ class OrderDetailScreen extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(order.summary,
-                        style: theme.textTheme.bodyMedium?.copyWith(fontSize: 13)),
+                        style:
+                            theme.textTheme.bodyMedium?.copyWith(fontSize: 13)),
                   ),
                 ],
               ),
@@ -228,8 +244,18 @@ class OrderDetailScreen extends StatelessWidget {
       return 'today, ${d.hour}:${d.minute.toString().padLeft(2, '0')}';
     }
     return '${d.day} ${const [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ][d.month - 1]}';
   }
 
@@ -302,7 +328,8 @@ class _ItemRow extends StatelessWidget {
 }
 
 class _TotalRow extends StatelessWidget {
-  const _TotalRow({required this.label, required this.value, this.bold = false});
+  const _TotalRow(
+      {required this.label, required this.value, this.bold = false});
 
   final String label;
   final int value;
@@ -361,7 +388,8 @@ class _DeliveryRow extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(title,
-                        style: theme.textTheme.bodyMedium?.copyWith(fontSize: 11)),
+                        style:
+                            theme.textTheme.bodyMedium?.copyWith(fontSize: 11)),
                     Text(subtitle,
                         style: theme.textTheme.bodyMedium
                             ?.copyWith(fontWeight: FontWeight.w600)),

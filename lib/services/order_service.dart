@@ -6,10 +6,11 @@ import 'api_client.dart';
 /// Item the checkout flow converts into an order line, keyed by the backend
 /// product id.
 class CheckoutItem {
-  const CheckoutItem(this.productId, this.quantity);
+  const CheckoutItem(this.productId, this.quantity, {this.storeId = 0});
 
   final int productId;
   final int quantity;
+  final int storeId;
 
   Map<String, dynamic> toJson() =>
       {'product_id': productId, 'quantity': quantity};
@@ -46,6 +47,36 @@ class OrderService {
     int? requestId,
     double? deliveryFee,
   }) async {
+    final created = await placeOrders(
+      token,
+      items,
+      address: address,
+      phone: phone,
+      deliveryLat: deliveryLat,
+      deliveryLng: deliveryLng,
+      riderId: riderId,
+      offerId: offerId,
+      requestId: requestId,
+      deliveryFee: deliveryFee,
+    );
+    if (created.length != 1) {
+      throw const ApiException('Checkout created multiple store orders');
+    }
+    return created.single;
+  }
+
+  Future<List<ApiOrder>> placeOrders(
+    String token,
+    List<CheckoutItem> items, {
+    required String address,
+    required String phone,
+    double? deliveryLat,
+    double? deliveryLng,
+    int? riderId,
+    int? offerId,
+    int? requestId,
+    double? deliveryFee,
+  }) async {
     final data = await api.post(
       '/api/v1/customer/orders',
       headers: _auth(token),
@@ -63,8 +94,16 @@ class OrderService {
         if (deliveryFee != null) 'delivery_fee': deliveryFee,
       },
     );
+    final orders = data['orders'];
+    if (orders is List) {
+      final parsed = orders
+          .whereType<Map<String, dynamic>>()
+          .map(ApiOrder.fromJson)
+          .toList();
+      if (parsed.isNotEmpty) return parsed;
+    }
     final order = data['order'];
-    if (order is Map<String, dynamic>) return ApiOrder.fromJson(order);
+    if (order is Map<String, dynamic>) return [ApiOrder.fromJson(order)];
     throw const ApiException('Unexpected order payload');
   }
 
@@ -100,9 +139,8 @@ Order toOrder(ApiOrder order) {
   final display = displayOrderStatus(order.status);
   final isDelivered = order.status == 'delivered';
   final isInTransit = display == 'In Transit';
-  final items = order.items
-      .map((i) => '${i.productName} ×${i.quantity}')
-      .join(', ');
+  final items =
+      order.items.map((i) => '${i.productName} ×${i.quantity}').join(', ');
   return Order(
     id: '#${order.id}',
     vendor: order.delivery?.storeName.isNotEmpty == true
@@ -135,7 +173,17 @@ String _formatDay(DateTime date) {
     return 'today';
   }
   return '${date.day} ${const [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ][date.month - 1]}';
 }

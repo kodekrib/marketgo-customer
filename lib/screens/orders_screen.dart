@@ -4,9 +4,11 @@ import '../models/api.dart';
 import '../models/marketplace.dart';
 import '../services/auth_service.dart';
 import '../services/order_service.dart';
+import '../services/payment_service.dart';
 import '../widgets/cards.dart';
 import '../widgets/common.dart';
 import 'order_detail_screen.dart';
+import 'payment_webview_screen.dart';
 
 /// Orders tab — gated behind auth. Loads the shopper's real orders from
 /// /api/v1/customer/orders; falls back to the bundled demo list during an
@@ -73,8 +75,7 @@ class _OrdersTabState extends State<OrdersTab> {
     }
   }
 
-  bool _isActive(Order o) =>
-      o.status != 'Delivered' && o.status != 'Cancelled';
+  bool _isActive(Order o) => o.status != 'Delivered' && o.status != 'Cancelled';
 
   Order? get _active {
     for (final o in _orders ?? const <Order>[]) {
@@ -190,9 +191,7 @@ class _OrdersTabState extends State<OrdersTab> {
               final apiOrder = _apiOrderFor(order);
               return OrderCard(
                 order: order,
-                thumbUrls: apiOrder?.items
-                        .map((i) => i.imageUrl)
-                        .toList() ??
+                thumbUrls: apiOrder?.items.map((i) => i.imageUrl).toList() ??
                     const <String>[],
                 itemCount: apiOrder?.items.length,
                 onTap: () => _openDetail(order, apiOrder),
@@ -217,9 +216,72 @@ class _OrdersTabState extends State<OrdersTab> {
           apiOrder: apiOrder,
           auth: widget.auth,
           onTrack: (orderId) => widget.onOpenTracking(orderId: orderId),
+          onPay:
+              apiOrder?.status == 'pending' ? () => _payOrder(apiOrder!) : null,
         ),
       ),
     );
+  }
+
+  Future<void> _payOrder(ApiOrder order) async {
+    final token = widget.auth.accessToken;
+    if (token == null) return;
+    try {
+      final payments = PaymentService();
+      final paymentData = await payments.initPayment(
+        token,
+        orderId: order.id,
+        amount: order.totalAmount,
+        email: widget.auth.user?.email ?? '',
+      );
+      if (!mounted) return;
+
+      final gateway = (paymentData['gateway'] ?? 'paystack').toString();
+      final reference = (paymentData['reference'] ?? '').toString();
+      final paymentUrl = gateway == 'paystack'
+          ? (paymentData['authorization_url'] ?? '').toString()
+          : (paymentData['payment_link'] ?? '').toString();
+      if (paymentUrl.isEmpty || reference.isEmpty) {
+        throw StateError(
+            'The payment provider did not return a checkout link.');
+      }
+
+      final paid = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => PaymentWebViewScreen(
+            paymentUrl: paymentUrl,
+            reference: reference,
+            gateway: gateway,
+          ),
+        ),
+      );
+      if (!mounted) return;
+
+      final verification = await payments.verifyPayment(
+        token,
+        reference: reference,
+      );
+      final transaction = verification['transaction'];
+      final status = transaction is Map ? transaction['status'] : null;
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            status == 'success' || status == 'successful'
+                ? 'Payment confirmed for order #${order.id}.'
+                : paid == true
+                    ? 'Payment is still being verified for order #${order.id}.'
+                    : 'Payment was not completed for order #${order.id}.',
+          ),
+        ),
+      );
+      await _load();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not complete payment: $error')),
+      );
+    }
   }
 
   ApiOrder? _apiOrderFor(Order order) {
@@ -299,7 +361,8 @@ class _OrderFilterBar extends StatelessWidget {
           color: isSelected ? CustomerApp.brandGreen : CustomerApp.surface,
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
-            color: isSelected ? CustomerApp.brandGreen : const Color(0xFFE2E5EA),
+            color:
+                isSelected ? CustomerApp.brandGreen : const Color(0xFFE2E5EA),
           ),
         ),
         child: Row(
@@ -359,9 +422,7 @@ class _EmptyFiltered extends StatelessWidget {
   Widget build(BuildContext context) {
     final isActive = filter == _OrderFilter.active;
     return _EmptyPanel(
-      icon: isActive
-          ? Icons.delivery_dining_rounded
-          : Icons.history_rounded,
+      icon: isActive ? Icons.delivery_dining_rounded : Icons.history_rounded,
       title: isActive ? 'No active orders' : 'No past orders',
       message: isActive
           ? 'Orders in progress and out for delivery will show up here.'
