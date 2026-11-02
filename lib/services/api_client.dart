@@ -13,10 +13,11 @@ String defaultApiBaseUrl() {
 }
 
 class ApiException implements Exception {
-  const ApiException(this.message, {this.statusCode});
+  const ApiException(this.message, {this.statusCode, this.code});
 
   final String message;
   final int? statusCode;
+  final String? code;
 
   @override
   String toString() => message;
@@ -223,7 +224,11 @@ class ApiClient {
     if (res.statusCode < 200 || res.statusCode >= 300) {
       final message =
           (json['error'] as String?) ?? 'Request failed (${res.statusCode})';
-      throw ApiException(message, statusCode: res.statusCode);
+      throw ApiException(
+        message,
+        statusCode: res.statusCode,
+        code: json['code'] is String ? json['code'] as String : null,
+      );
     }
     return json;
   }

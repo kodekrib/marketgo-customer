@@ -70,7 +70,7 @@ class Product {
   final String name;
   final String vendorName;
   final String unit;
-  final int price; // whole naira units
+  final double price;
   final Color color;
   final IconData icon;
   final String imageUrl; // optional product photo from the vendor panel
@@ -107,7 +107,7 @@ class Order {
   final String vendor;
   final String summary;
   final String meta;
-  final int amount;
+  final double amount;
   final String status; // Processing | In Transit | Delivered
   final Color color;
   final IconData icon;

@@ -187,6 +187,15 @@ class ApiStoreOrderQuote {
     );
   }
 
+  Map<String, dynamic> toJson() => {
+        'store_id': storeId,
+        'subtotal': subtotal,
+        'delivery_fee': deliveryFee,
+        'service_fee': serviceFee,
+        'total_amount': totalAmount,
+        'currency': currency,
+      };
+
   factory ApiStoreOrderQuote.fromJson(Map<String, dynamic> json) =>
       ApiStoreOrderQuote(
         storeId: _int(json['store_id']),

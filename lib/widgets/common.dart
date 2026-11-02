@@ -2,20 +2,23 @@
 import 'package:flutter/material.dart';
 import '../app.dart';
 
-/// Formats an amount in whole currency units, e.g. 82000 -> "₦82,000".
-String formatPrice(int value) {
-  final s = value.toString();
+/// Formats currency amounts to two decimal places when fractional.
+String formatPrice(num value) {
+  final minorUnits = (value.abs() * 100).round();
+  final majorUnits = (minorUnits ~/ 100).toString();
   final buffer = StringBuffer();
-  for (var i = 0; i < s.length; i++) {
-    if (i > 0 && (s.length - i) % 3 == 0) buffer.write(',');
-    buffer.write(s[i]);
+  for (var i = 0; i < majorUnits.length; i++) {
+    if (i > 0 && (majorUnits.length - i) % 3 == 0) buffer.write(',');
+    buffer.write(majorUnits[i]);
   }
-  return '${CustomerApp.currencySymbol}$buffer';
+  final fraction = minorUnits % 100;
+  final decimal =
+      fraction == 0 ? '' : '.${fraction.toString().padLeft(2, '0')}';
+  final sign = value < 0 ? '-' : '';
+  return '$sign${CustomerApp.currencySymbol}$buffer$decimal';
 }
 
-/// Formats a double money amount, rounding to whole currency units,
-/// e.g. 1520.5 -> "₦1,521".
-String formatMoney(double value) => formatPrice(value.round());
+String formatMoney(double value) => formatPrice(value);
 
 /// Colour assigned to each order status, matching the marketgo-vendor panel.
 const Map<String, Color> kOrderStatusColors = {
@@ -31,7 +34,7 @@ Color kOrderStatusColor(String status) =>
 class PriceText extends StatelessWidget {
   const PriceText(this.value, {super.key, this.size, this.weight});
 
-  final int value;
+  final double value;
   final double? size;
   final FontWeight? weight;
 

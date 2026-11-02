@@ -20,7 +20,7 @@ class CartModel extends ChangeNotifier {
   bool get isEmpty => _items.isEmpty;
   int get quantity =>
       _items.fold(0, (sum, item) => sum + item.quantity);
-  int get subtotal =>
+  double get subtotal =>
       _items.fold(0, (sum, item) => sum + item.product.price * item.quantity);
 
   int quantityOf(String productId) {

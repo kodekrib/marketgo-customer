@@ -7,6 +7,7 @@ import '../models/cart.dart';
 import '../models/request.dart';
 import '../services/account_store.dart';
 import '../services/auth_service.dart';
+import '../services/api_client.dart';
 import '../services/order_service.dart';
 import '../services/payment_service.dart';
 import '../services/maps_service.dart';
@@ -191,7 +192,7 @@ class _CheckoutSheet extends StatefulWidget {
 class _CheckoutSheetState extends State<_CheckoutSheet> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _address;
-  final _phone = TextEditingController(text: '08012345678');
+  final _phone = TextEditingController();
   _DeliveryArea? _area = _deliveryAreas.first;
   PlaceSuggestion? _picked;
   List<ApiStoreOrderQuote>? _quotes;
@@ -207,7 +208,7 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
     // Prefill with the saved default address if available.
     final saved = AccountStore.instance.defaultAddress;
     _address = TextEditingController(
-      text: saved?.address ?? '12 Admiralty Way, Lekki, Lagos',
+      text: saved?.address ?? '',
     );
     _refreshQuote();
   }
@@ -317,6 +318,7 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
         widget.token,
         widget.items,
         idempotencyKey: _idempotencyKey,
+        expectedQuotes: _quotes!,
         address: _address.text.trim(),
         phone: _phone.text.trim(),
         deliveryLat: deliveryLat,
@@ -424,6 +426,25 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
         );
       }
       widget.onPlaced(orders.first.id);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      if (e.code == 'checkout_price_changed') {
+        await _refreshQuote();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _quotes == null
+                  ? 'Prices changed. The cart is still saved; refresh pricing before retrying.'
+                  : 'Prices changed. Review the updated total before placing your order.',
+            ),
+          ),
+        );
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not place order: $e')),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -560,7 +581,7 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
 class _CartSubtotal extends StatelessWidget {
   const _CartSubtotal({required this.subtotal});
 
-  final int subtotal;
+  final double subtotal;
 
   @override
   Widget build(BuildContext context) {
@@ -702,7 +723,7 @@ class _SummaryRow extends StatelessWidget {
   const _SummaryRow({required this.label, required this.value});
 
   final String label;
-  final int value;
+  final double value;
 
   @override
   Widget build(BuildContext context) {

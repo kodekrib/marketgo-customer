@@ -151,7 +151,7 @@ List<Product> _adaptProducts(List<dynamic> raw) =>
         name: p.name,
         vendorName: p.store?.name ?? 'MarketGO',
         unit: p.unit.isEmpty ? 'each' : p.unit,
-        price: p.price.round(),
+        price: p.price,
         color: color,
         icon: categoryIcon(p.category?.icon) == Icons.category_rounded
             ? Icons.inventory_2_rounded

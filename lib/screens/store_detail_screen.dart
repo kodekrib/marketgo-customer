@@ -44,7 +44,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                     name: p.name,
                     vendorName: p.store?.name ?? widget.vendor.name,
                     unit: p.unit.isEmpty ? 'each' : p.unit,
-                    price: p.price.round(),
+                    price: p.price,
                     color: colorFor(p.category?.name ?? p.name),
                     icon: categoryIcon(p.category?.icon) == Icons.category_rounded
                         ? Icons.inventory_2_rounded
@@ -246,7 +246,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                         icon: Icons.delivery_dining_rounded,
                         iconColor: const Color(0xFF2563EB),
                         label: v.deliveryFee > 0
-                            ? 'Delivery: ${formatPrice(v.deliveryFee.round())}'
+                            ? 'Delivery: ${formatPrice(v.deliveryFee)}'
                             : 'Free delivery',
                       ),
                       // Estimated time

@@ -64,6 +64,7 @@ class OrderService {
     String token,
     List<CheckoutItem> items, {
     required String idempotencyKey,
+    required List<ApiStoreOrderQuote> expectedQuotes,
     required String address,
     required String phone,
     double? deliveryLat,
@@ -77,6 +78,7 @@ class OrderService {
       token,
       items,
       idempotencyKey: idempotencyKey,
+      expectedQuotes: expectedQuotes,
       address: address,
       phone: phone,
       deliveryLat: deliveryLat,
@@ -96,6 +98,7 @@ class OrderService {
     String token,
     List<CheckoutItem> items, {
     required String idempotencyKey,
+    required List<ApiStoreOrderQuote> expectedQuotes,
     required String address,
     required String phone,
     double? deliveryLat,
@@ -110,6 +113,8 @@ class OrderService {
       headers: _auth(token),
       body: {
         'idempotency_key': idempotencyKey,
+        'expected_quotes':
+            expectedQuotes.map((quote) => quote.toJson()).toList(),
         'delivery_address': address,
         'phone': phone,
         if (deliveryLat != null && deliveryLat != 0)
@@ -181,7 +186,7 @@ Order toOrder(ApiOrder order) {
         : isInTransit
             ? 'In transit · track live'
             : 'Placed ${_formatDay(order.createdAt)}',
-    amount: order.totalAmount.round(),
+    amount: order.totalAmount,
     status: display,
     color: isDelivered
         ? const Color(0xFF16A34A)

@@ -107,7 +107,7 @@ class FavouriteProduct {
   final String id;
   final String name;
   final String unit;
-  final int price;
+  final double price;
   final String vendorName;
 
   Map<String, dynamic> toJson() => {
@@ -123,7 +123,7 @@ class FavouriteProduct {
         id: json['id'] as String? ?? '',
         name: json['name'] as String? ?? '',
         unit: json['unit'] as String? ?? '',
-        price: (json['price'] as num?)?.toInt() ?? 0,
+        price: (json['price'] as num?)?.toDouble() ?? 0,
         vendorName: json['vendorName'] as String? ?? '',
       );
 }

@@ -390,7 +390,7 @@ class _RiderInfoCardState extends State<_RiderInfoCard> {
   @override
   Widget build(BuildContext context) {
     final payments = d != null
-        ? '${CustomerApp.currencySymbol}${d!.fee.round()} fee'
+        ? '${formatMoney(d!.fee)} fee'
         : '${CustomerApp.currencySymbol}500 delivery';
 
     return Container(
@@ -643,4 +643,3 @@ class _RateRiderSheetState extends State<_RateRiderSheet> {
     );
   }
 }
-

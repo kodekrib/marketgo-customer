@@ -582,7 +582,7 @@ class _CourierCard extends StatelessWidget {
                             style: theme.textTheme.bodyMedium
                                 ?.copyWith(fontSize: 11)),
                         const SizedBox(height: 1),
-                        PriceText(delivery.fee.round(), size: 16),
+                        PriceText(delivery.fee, size: 16),
                       ],
                     ),
                   ],

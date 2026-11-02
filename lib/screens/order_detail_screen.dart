@@ -181,12 +181,9 @@ class OrderDetailScreen extends StatelessWidget {
               children: [
                 _TotalRow(label: 'Subtotal', value: _subtotal()),
                 _TotalRow(
-                    label: 'Delivery fee',
-                    value: apiOrder?.deliveryFee.round() ?? 0),
+                    label: 'Delivery fee', value: apiOrder?.deliveryFee ?? 0),
                 if ((apiOrder?.serviceFee ?? 0) > 0)
-                  _TotalRow(
-                      label: 'Service fee',
-                      value: apiOrder!.serviceFee.round()),
+                  _TotalRow(label: 'Service fee', value: apiOrder!.serviceFee),
                 const Divider(height: 24),
                 _TotalRow(label: 'Total', value: order.amount, bold: true),
               ],
@@ -259,9 +256,9 @@ class OrderDetailScreen extends StatelessWidget {
     ][d.month - 1]}';
   }
 
-  int _subtotal() {
+  double _subtotal() {
     if (apiOrder != null && apiOrder!.subtotal > 0) {
-      return apiOrder!.subtotal.round();
+      return apiOrder!.subtotal;
     }
     return order.amount;
   }
@@ -320,10 +317,10 @@ class _ItemRow extends StatelessWidget {
     );
   }
 
-  int _lineTotal(ApiOrderItem item) {
+  double _lineTotal(ApiOrderItem item) {
     final total = item.totalPrice;
-    if (total > 0) return total.round();
-    return (item.unitPrice * item.quantity).round();
+    if (total > 0) return total;
+    return item.unitPrice * item.quantity;
   }
 }
 
@@ -332,7 +329,7 @@ class _TotalRow extends StatelessWidget {
       {required this.label, required this.value, this.bold = false});
 
   final String label;
-  final int value;
+  final double value;
   final bool bold;
 
   @override
